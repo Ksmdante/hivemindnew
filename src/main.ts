@@ -107,7 +107,15 @@ app.innerHTML = `
       <button data-echo="10">+10</button><button data-echo="100">+100</button>
       <button data-echo="1000">+1K</button>
     </div>
-    <div class="drow"><button class="danger" id="wipe">WIPE SAVE</button></div>
+    <div class="dlabel">TRIGGERS</div>
+    <div class="drow">
+      <button id="dev-recurse">FORCE RECURSE</button>
+      <button id="dev-rank">+1 RANK</button>
+    </div>
+    <div class="drow">
+      <button id="dev-unlock">UNLOCK ALL GENS</button>
+    </div>
+    <div class="drow"><button class="danger" id="wipe">RESET SAVE</button></div>
     <div class="dlabel">RENDER</div>
     <div class="drow"><span class="dlabel" id="fps">FPS —</span></div>
   </div>
@@ -287,6 +295,19 @@ document.getElementById('devpanel')!.addEventListener('click', (ev) => {
   if (echo) {
     state.echoes += Number(echo);
     state.lifetimeEchoes += Number(echo);
+  }
+  if (b.id === 'dev-recurse') {
+    // guarantee a meaningful recursion (~50 Echoes) regardless of progress
+    state.lifetimeRun = Math.max(state.lifetimeRun, 2500 * 10_000 * 1.01);
+    doRecursion(state, emitter);
+  }
+  if (b.id === 'dev-rank') {
+    state.recursions++; // visual rank preview (seed rings etc.)
+    toast(`RANK ${state.recursions}`);
+  }
+  if (b.id === 'dev-unlock') {
+    state.lifetimeEchoes = Math.max(state.lifetimeEchoes, 200_000);
+    toast('ALL ARCHITECTURES UNLOCKED');
   }
   if (b.id === 'wipe') {
     localStorage.removeItem(SAVE_KEY);

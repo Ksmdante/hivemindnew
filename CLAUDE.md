@@ -75,6 +75,12 @@ If a deliberate rebalance moves a target, change the test AND the table in
   driven by radial extent (close-up start → pull-back as network grows).
   Distinct evolving seed: orbiting arc rings, one per Recursion (cap 5),
   eye-like core. PARKED for later: background palette evolving per Recursion.
+- **S2.4 (done):** hub = biggest node of class (stage, then age) so the trunk
+  node is always the largest; web topology — each node stores a parentId
+  (~30% link to hub, rest to a random sibling; stale links reattach to the
+  nearest sibling); comets/edges follow the node's actual link. Visual cap
+  44/class (bootstrap smalls 20, comet cap 140). Dev console: FORCE RECURSE,
+  +1 RANK, UNLOCK ALL GENS, RESET SAVE alongside grants/time-warps.
 - S3: Recursion UX + Echo Web screen (engine support already present).
 - S4: cards (Archive) — plug into `overloadChance`/`genRate`/`genCost` seams.
 - S5: signals — ride the existing `ActiveBuff` system; add cooldown store.

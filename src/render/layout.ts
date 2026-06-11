@@ -17,11 +17,16 @@ export interface NetNode {
   bornAt: number; // performance.now() ms — spawn pop-in
   /** next ambient ping (ms). 0 = renderer initialises to bornAt + cycle. */
   nextPingAt: number;
+  /** Edge target: -1 = the seed (trunk line); otherwise another node's id.
+   *  ~30% of nodes link to their class hub, the rest to a random sibling —
+   *  the class reads as a web, not a fan. */
+  parentId: number;
   /** target = resulting stage of the fusion this node is converging into. */
   fusing: { tx: number; ty: number; startedAt: number; dur: number; target: number } | null;
 }
 
-const MAX_VISIBLE_PER_GEN = 28;
+const MAX_VISIBLE_PER_GEN = 44;
+const HUB_LINK_CHANCE = 0.3;
 /** Collision radius per visual stage — matches the sprites' drawn extent. */
 export const NODE_RADIUS = [13, 19, 27];
 /** Nothing may be placed inside this radius around the seed. */
@@ -40,14 +45,46 @@ export class Network {
     this.nodes = [];
   }
 
-  /** The class hub: oldest node of the generator type. The hub is the only
-   *  node of its class that connects to the seed; siblings connect to it. */
+  /** The class hub: the BIGGEST node of the type (highest stage, oldest as
+   *  tiebreak). The node on the trunk to the seed is always the biggest —
+   *  fusions automatically promote the fused node to hub. */
   hubOf(genId: string): NetNode | null {
     let hub: NetNode | null = null;
     for (const n of this.nodes) {
-      if (n.gen === genId && (hub === null || n.id < hub.id)) hub = n;
+      if (n.gen !== genId) continue;
+      if (hub === null || n.stage > hub.stage || (n.stage === hub.stage && n.id < hub.id)) {
+        hub = n;
+      }
     }
     return hub;
+  }
+
+  /** Resolve a node's edge target. null = the seed. Reattaches stale links
+   *  (parent fused away) to the nearest same-class node. */
+  parentNodeOf(n: NetNode): NetNode | null {
+    const hub = this.hubOf(n.gen);
+    if (!hub || hub.id === n.id) {
+      if (n.parentId !== -1) n.parentId = -1;
+      return null; // the hub (or a lone node) trunks to the seed
+    }
+    if (n.parentId === -1) n.parentId = hub.id; // demoted ex-hub re-links
+    let p = this.nodes.find((x) => x.id === n.parentId);
+    if (!p || p.id === n.id) {
+      // stale link — reattach to nearest sibling (hub as fallback)
+      let best: NetNode | null = null;
+      let bd = Infinity;
+      for (const x of this.nodes) {
+        if (x.gen !== n.gen || x.id === n.id) continue;
+        const d = (x.x - n.x) ** 2 + (x.y - n.y) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = x;
+        }
+      }
+      p = best ?? hub;
+      n.parentId = p.id;
+    }
+    return p;
   }
 
   /** Place a new small node for a purchase. Returns null when at visual cap. */
@@ -56,15 +93,20 @@ export class Network {
     if (siblings.length >= MAX_VISIBLE_PER_GEN) return null;
 
     let spot: { x: number; y: number };
+    let parentId = -1;
     if (siblings.length === 0) {
       // First node of this class — its own sector radiating from the seed,
-      // placed well clear of the centre.
+      // placed well clear of the centre. Trunks to the seed.
       const genIndex = GENERATORS.findIndex((g) => g.id === genId);
       const baseAngle = genIndex * GOLDEN + (Math.random() - 0.5) * 0.5;
       spot = this.findFreeSpotDirected(baseAngle, 92, NODE_RADIUS[0]);
     } else {
-      // Grow organically around a random sibling; the edge runs to the hub.
+      // Grow organically around a random sibling; link to the hub sometimes,
+      // otherwise to that sibling — a web, not a fan.
       const anchor = siblings[Math.floor(Math.random() * siblings.length)];
+      const hub = this.hubOf(genId)!;
+      const parent = Math.random() < HUB_LINK_CHANCE ? hub : anchor;
+      parentId = parent.id;
       spot = this.findFreeSpot(anchor.x, anchor.y, NODE_RADIUS[0]);
     }
 
@@ -77,6 +119,7 @@ export class Network {
       phase: Math.random() * Math.PI * 2,
       bornAt: now,
       nextPingAt: 0,
+      parentId,
       fusing: null,
     };
     this.nodes.push(node);
@@ -202,6 +245,7 @@ export class Network {
         phase: Math.random() * Math.PI * 2,
         bornAt: now,
         nextPingAt: 0,
+        parentId: -1, // parentNodeOf demotes/promotes against the hub lazily
         fusing: null,
       };
       this.nodes.push(fused);
@@ -231,7 +275,7 @@ export class Network {
         if (n) n.stage = 1;
       }
       const lastThreshold = syncs > 0 ? SYNC_THRESHOLDS[syncs - 1] : 0;
-      const smalls = Math.min(owned - lastThreshold, 12);
+      const smalls = Math.min(owned - lastThreshold, 20);
       for (let i = 0; i < smalls; i++) this.addNode(g.id, now);
     }
     // Loaded saves: all nodes share one bornAt, which would make every node

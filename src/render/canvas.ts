@@ -143,24 +143,22 @@ export class NetworkRenderer {
     }
   }
 
-  /** Comets always travel a real edge, inward: sibling → its class hub,
-   *  hub → seed. */
+  /** Comets always travel the node's actual edge, inward: node → its link
+   *  target (hub or sibling), hub → seed. */
   private spawnComet(
-    from: { x: number; y: number; gen?: string; id?: number },
+    from: import('./layout').NetNode,
     color: string,
     overload: boolean,
     amount: number,
     showFloat: boolean,
   ): void {
-    if (this.comets.length > 120) return;
+    if (this.comets.length > 140) return;
     let tx = 0;
     let ty = 0;
-    if (from.gen) {
-      const hub = this.net.hubOf(from.gen);
-      if (hub && hub.id !== from.id) {
-        tx = hub.x;
-        ty = hub.y;
-      } // hub itself (or no hub) → fires inward to the seed
+    const p = this.net.parentNodeOf(from);
+    if (p !== null) {
+      tx = p.x;
+      ty = p.y;
     }
     const mx = (from.x + tx) / 2;
     const my = (from.y + ty) / 2;
@@ -330,33 +328,34 @@ export class NetworkRenderer {
     this.punch *= Math.pow(0.005, dt);
   }
 
-  /** Hub-and-spoke topology: each class's hub (oldest node) connects to the
-   *  seed; every sibling connects to its hub. Resolved per frame so edges
-   *  follow fusions and never point at stale positions. */
+  /** Web topology: every node draws the edge to its actual link target —
+   *  the class hub (biggest node) trunks to the seed; others link to the hub
+   *  or a sibling. Resolved per frame so fusions never leave stale lines. */
   private drawEdges(ctx: CanvasRenderingContext2D, nowMs: number): void {
     ctx.lineWidth = 0.7 / this.camScale;
-    for (const g of GENERATORS) {
-      const group = this.net.perGen(g.id);
-      if (group.length === 0) continue;
-      const hub = this.net.hubOf(g.id)!;
-      const hubPos = this.nodePos(hub, nowMs);
-      // hub → seed, slightly brighter: this is the class's trunk line
-      ctx.strokeStyle = 'rgba(78,128,196,0.30)';
-      ctx.beginPath();
-      ctx.moveTo(hubPos.x, hubPos.y);
-      ctx.lineTo(0, 0);
-      ctx.stroke();
-      // siblings → hub
-      ctx.strokeStyle = 'rgba(58,104,168,0.16)';
-      ctx.beginPath();
-      for (const n of group) {
-        if (n === hub) continue;
+    // trunks (hub → seed), brighter
+    ctx.strokeStyle = 'rgba(78,128,196,0.30)';
+    ctx.beginPath();
+    for (const n of this.net.nodes) {
+      if (this.net.parentNodeOf(n) === null) {
         const pos = this.nodePos(n, nowMs);
         ctx.moveTo(pos.x, pos.y);
-        ctx.lineTo(hubPos.x, hubPos.y);
+        ctx.lineTo(0, 0);
       }
-      ctx.stroke();
     }
+    ctx.stroke();
+    // web links (node → hub or sibling), dim
+    ctx.strokeStyle = 'rgba(58,104,168,0.16)';
+    ctx.beginPath();
+    for (const n of this.net.nodes) {
+      const p = this.net.parentNodeOf(n);
+      if (p === null) continue;
+      const pos = this.nodePos(n, nowMs);
+      const pp = this.nodePos(p, nowMs);
+      ctx.moveTo(pos.x, pos.y);
+      ctx.lineTo(pp.x, pp.y);
+    }
+    ctx.stroke();
   }
 
   private nodePos(n: { x: number; y: number; fusing: { tx: number; ty: number; startedAt: number; dur: number } | null }, nowMs: number) {
