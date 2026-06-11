@@ -61,6 +61,12 @@ If a deliberate rebalance moves a target, change the test AND the table in
   with per-stage radii + golden-angle fallback (no more stacked nodes). UI:
   per-row sync progress bars, generator color dots, press states, transitions,
   recurse-button pulse. Visual cap purchases now acknowledge via node ripple.
+- **S2.2 (done, second playtest round):** 64-unit seed clearance (nothing
+  spawns near the centre; class hubs spawn ~92 out in golden-angle sectors).
+  Hub-and-spoke topology: first node of each class = hub with brighter trunk
+  to seed; siblings edge to their hub (resolved per frame). Pings now run at
+  the generator's TRUE cycle per node, phased by placement time (no rate
+  stretching) — bootstrap scatters phases for loaded saves; comet cap 120.
 - S3: Recursion UX + Echo Web screen (engine support already present).
 - S4: cards (Archive) — plug into `overloadChance`/`genRate`/`genCost` seams.
 - S5: signals — ride the existing `ActiveBuff` system; add cooldown store.

@@ -149,7 +149,7 @@ export class NetworkRenderer {
     amount: number,
     showFloat: boolean,
   ): void {
-    if (this.comets.length > 70) return;
+    if (this.comets.length > 120) return;
     const px = -y * 0.25;
     const py = x * 0.25;
     this.comets.push({
@@ -166,24 +166,24 @@ export class NetworkRenderer {
     });
   }
 
-  /** Per-node ambient pings: each visual node fires on its own cycle, phased
-   *  from when it was born. Visual cycle stretches when a class has many
-   *  nodes so total ping rate per class stays ~bounded. */
+  /** Per-node pings: every visual node fires on its generator's TRUE cycle,
+   *  phased by when it was placed — a Neuron bought at t=1.000s fires at
+   *  2.000s, one bought at t=2.232s fires at 3.232s, forever. Fast classes
+   *  read as constant chatter, slow classes as rare heavy beats. */
   private schedulePings(nowMs: number): void {
-    const counts = new Map<string, number>();
-    for (const n of this.net.nodes) {
-      if (!n.fusing) counts.set(n.gen, (counts.get(n.gen) ?? 0) + 1);
-    }
     for (const n of this.net.nodes) {
       if (n.fusing) continue;
       const g = GEN_BY_ID[n.gen];
-      const count = counts.get(n.gen) ?? 1;
-      const vc = g.cycle * Math.max(1, count / 6) * 1000;
-      if (n.nextPingAt === 0) n.nextPingAt = n.bornAt + g.cycle * 1000;
+      const vc = g.cycle * 1000;
+      if (n.nextPingAt === 0) n.nextPingAt = n.bornAt + vc;
       if (nowMs >= n.nextPingAt) {
-        if (nowMs - n.nextPingAt > vc * 2) n.nextPingAt = nowMs; // hidden-tab catch-up
-        this.spawnComet(n.x, n.y, g.color, false, 0, false);
-        n.nextPingAt += vc;
+        if (nowMs - n.nextPingAt > vc * 2) {
+          // hidden-tab catch-up: keep the original phase, skip missed beats
+          n.nextPingAt += Math.ceil((nowMs - n.nextPingAt) / vc) * vc;
+        } else {
+          this.spawnComet(n.x, n.y, g.color, false, 0, false);
+          n.nextPingAt += vc;
+        }
       }
     }
   }
@@ -312,16 +312,33 @@ export class NetworkRenderer {
     this.punch *= Math.pow(0.005, dt);
   }
 
+  /** Hub-and-spoke topology: each class's hub (oldest node) connects to the
+   *  seed; every sibling connects to its hub. Resolved per frame so edges
+   *  follow fusions and never point at stale positions. */
   private drawEdges(ctx: CanvasRenderingContext2D, nowMs: number): void {
-    ctx.strokeStyle = 'rgba(58,104,168,0.16)';
     ctx.lineWidth = 0.7 / this.camScale;
-    ctx.beginPath();
-    for (const n of this.net.nodes) {
-      const pos = this.nodePos(n, nowMs);
-      ctx.moveTo(pos.x, pos.y);
-      ctx.lineTo(n.parentX, n.parentY);
+    for (const g of GENERATORS) {
+      const group = this.net.perGen(g.id);
+      if (group.length === 0) continue;
+      const hub = this.net.hubOf(g.id)!;
+      const hubPos = this.nodePos(hub, nowMs);
+      // hub → seed, slightly brighter: this is the class's trunk line
+      ctx.strokeStyle = 'rgba(78,128,196,0.30)';
+      ctx.beginPath();
+      ctx.moveTo(hubPos.x, hubPos.y);
+      ctx.lineTo(0, 0);
+      ctx.stroke();
+      // siblings → hub
+      ctx.strokeStyle = 'rgba(58,104,168,0.16)';
+      ctx.beginPath();
+      for (const n of group) {
+        if (n === hub) continue;
+        const pos = this.nodePos(n, nowMs);
+        ctx.moveTo(pos.x, pos.y);
+        ctx.lineTo(hubPos.x, hubPos.y);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
   }
 
   private nodePos(n: { x: number; y: number; fusing: { tx: number; ty: number; startedAt: number; dur: number } | null }, nowMs: number) {
@@ -415,7 +432,7 @@ export class NetworkRenderer {
       };
       const head = bez(e);
       // trail
-      const TRAIL = c.overload ? 6 : 4;
+      const TRAIL = c.overload ? 6 : 3;
       for (let i = 1; i <= TRAIL; i++) {
         const tt = Math.max(0, e - i * 0.035);
         const p = bez(tt);

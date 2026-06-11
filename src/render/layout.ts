@@ -3,10 +3,9 @@
 // collision-avoiding retries. Synchronizations fuse a class's nodes into one
 // larger-stage node (the AdCap milestone wearing the fusion visual).
 
-import { SYNC_THRESHOLDS } from '../data/generators';
+import { SYNC_THRESHOLDS, GENERATORS, GEN_BY_ID } from '../data/generators';
 import type { GameState } from '../engine/state';
 import { syncCount } from '../engine/economy';
-import { GENERATORS } from '../data/generators';
 
 export interface NetNode {
   id: number;
@@ -18,14 +17,15 @@ export interface NetNode {
   bornAt: number; // performance.now() ms — spawn pop-in
   /** next ambient ping (ms). 0 = renderer initialises to bornAt + cycle. */
   nextPingAt: number;
-  parentX: number;
-  parentY: number;
   fusing: { tx: number; ty: number; startedAt: number; dur: number } | null;
 }
 
 const MAX_VISIBLE_PER_GEN = 28;
 /** Collision radius per visual stage — matches the sprites' drawn extent. */
 export const NODE_RADIUS = [13, 19, 27];
+/** Nothing may be placed inside this radius around the seed. */
+const SEED_CLEARANCE = 64;
+const GOLDEN = 2.39996;
 
 export class Network {
   nodes: NetNode[] = [];
@@ -39,20 +39,34 @@ export class Network {
     this.nodes = [];
   }
 
+  /** The class hub: oldest node of the generator type. The hub is the only
+   *  node of its class that connects to the seed; siblings connect to it. */
+  hubOf(genId: string): NetNode | null {
+    let hub: NetNode | null = null;
+    for (const n of this.nodes) {
+      if (n.gen === genId && (hub === null || n.id < hub.id)) hub = n;
+    }
+    return hub;
+  }
+
   /** Place a new small node for a purchase. Returns null when at visual cap. */
   addNode(genId: string, now: number): NetNode | null {
     const siblings = this.perGen(genId).filter((n) => !n.fusing);
     if (siblings.length >= MAX_VISIBLE_PER_GEN) return null;
 
-    const anchorPool = siblings.length > 0 ? siblings : this.nodes.filter((n) => !n.fusing);
-    const anchor =
-      anchorPool.length > 0
-        ? anchorPool[Math.floor(Math.random() * anchorPool.length)]
-        : null;
-    const ax = anchor ? anchor.x : 0;
-    const ay = anchor ? anchor.y : 0;
+    let spot: { x: number; y: number };
+    if (siblings.length === 0) {
+      // First node of this class — its own sector radiating from the seed,
+      // placed well clear of the centre.
+      const genIndex = GENERATORS.findIndex((g) => g.id === genId);
+      const baseAngle = genIndex * GOLDEN + (Math.random() - 0.5) * 0.5;
+      spot = this.findFreeSpotDirected(baseAngle, 92, NODE_RADIUS[0]);
+    } else {
+      // Grow organically around a random sibling; the edge runs to the hub.
+      const anchor = siblings[Math.floor(Math.random() * siblings.length)];
+      spot = this.findFreeSpot(anchor.x, anchor.y, NODE_RADIUS[0]);
+    }
 
-    const spot = this.findFreeSpot(ax, ay, NODE_RADIUS[0]);
     const node: NetNode = {
       id: this.nextId++,
       gen: genId,
@@ -62,8 +76,6 @@ export class Network {
       phase: Math.random() * Math.PI * 2,
       bornAt: now,
       nextPingAt: 0,
-      parentX: ax,
-      parentY: ay,
       fusing: null,
     };
     this.nodes.push(node);
@@ -71,6 +83,7 @@ export class Network {
   }
 
   private collides(x: number, y: number, r: number): boolean {
+    if (x * x + y * y < SEED_CLEARANCE * SEED_CLEARANCE) return true; // keep the centre open
     for (const n of this.nodes) {
       const min = r + NODE_RADIUS[n.stage] - 4; // slight halo overlap is fine
       if ((n.x - x) ** 2 + (n.y - y) ** 2 < min * min) return true;
@@ -88,7 +101,6 @@ export class Network {
       const cy = ay + Math.sin(angle) * dist;
       if (!this.collides(cx, cy, r)) return { x: cx, y: cy };
     }
-    const GOLDEN = 2.39996;
     for (let k = 1; k < 200; k++) {
       const dist = 30 + k * 4.5;
       const angle = k * GOLDEN;
@@ -97,6 +109,19 @@ export class Network {
       if (!this.collides(cx, cy, r)) return { x: cx, y: cy };
     }
     return { x: ax + 30, y: ay + 30 }; // unreachable in practice
+  }
+
+  /** Placement along a preferred direction from the seed (class hubs):
+   *  walk outward along the sector until open space is found. */
+  private findFreeSpotDirected(angle: number, startDist: number, r: number): { x: number; y: number } {
+    for (let k = 0; k < 60; k++) {
+      const dist = startDist + k * 6;
+      const wobble = (Math.random() - 0.5) * 0.25;
+      const cx = Math.cos(angle + wobble) * dist;
+      const cy = Math.sin(angle + wobble) * dist;
+      if (!this.collides(cx, cy, r)) return { x: cx, y: cy };
+    }
+    return this.findFreeSpot(Math.cos(angle) * startDist, Math.sin(angle) * startDist, r);
   }
 
   /** Synchronization: converge this class's nodes to their centroid, then
@@ -147,8 +172,6 @@ export class Network {
         phase: Math.random() * Math.PI * 2,
         bornAt: now,
         nextPingAt: 0,
-        parentX: 0,
-        parentY: 0,
         fusing: null,
       };
       this.nodes.push(fused);
@@ -171,6 +194,11 @@ export class Network {
       const lastThreshold = syncs > 0 ? SYNC_THRESHOLDS[syncs - 1] : 0;
       const smalls = Math.min(owned - lastThreshold, 12);
       for (let i = 0; i < smalls; i++) this.addNode(g.id, now);
+    }
+    // Loaded saves: all nodes share one bornAt, which would make every node
+    // of a class fire in unison — scatter the first ping across the cycle.
+    for (const n of this.nodes) {
+      n.nextPingAt = now + Math.random() * GEN_BY_ID[n.gen].cycle * 1000;
     }
   }
 }
