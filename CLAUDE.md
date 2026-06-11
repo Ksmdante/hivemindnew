@@ -47,9 +47,13 @@ If a deliberate rebalance moves a target, change the test AND the table in
 
 - **S0+S1 (done):** scaffold, pure engine (pulse accrual, syncs, Impulse,
   Echo formula, offline, save), invariant suite green, placeholder shell UI.
-- **S2 (next):** canvas renderer — design §11. Rasterize procedural SVG shapes
-  (port from `../hivemind/generators.js`) into sprite atlases; additive glow;
-  comet pulses driven by `pulse` events; parallax + camera; FPS meter.
+- **S2 (done):** canvas renderer — sprite atlas rasterized from procedural SVG
+  (`render/shapes.ts` ported from the prototype), additive glow, comet pulses
+  to the seed, fusion-on-sync, accrual rings (cycle ≥10s), parallax dust,
+  camera fit/drift/punch, ripples, floats, recursion flash, ResizeObserver
+  sizing, FPS in dev panel, `window.__hm` dev handle (DEV builds only).
+  **Still owed from S2 scope:** local mono font, grain pass, on-device 60fps
+  check (do during S7 polish / S9 QA).
 - S3: Recursion UX + Echo Web screen (engine support already present).
 - S4: cards (Archive) — plug into `overloadChance`/`genRate`/`genCost` seams.
 - S5: signals — ride the existing `ActiveBuff` system; add cooldown store.

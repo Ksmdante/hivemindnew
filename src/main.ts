@@ -23,6 +23,9 @@ import { applyOffline } from './engine/offline';
 import { serialize, deserialize } from './engine/save';
 import { Emitter } from './engine/events';
 import { fmtNum, fmtTime } from './util/format';
+import { Network } from './render/layout';
+import { NetworkRenderer } from './render/canvas';
+import { buildSprites } from './render/sprites';
 
 const SAVE_KEY = 'hivemind2.save';
 const TICK_MS = 100;
@@ -76,8 +79,7 @@ app.innerHTML = `
     </div>
   </header>
   <div class="stage" id="stage">
-    <div class="feed" id="feed"></div>
-    <div class="seed"></div>
+    <canvas id="net"></canvas>
     <div class="hint">TAP · IMPULSE</div>
   </div>
   <div class="drawer">
@@ -106,6 +108,8 @@ app.innerHTML = `
       <button data-echo="1000">+1K</button>
     </div>
     <div class="drow"><button class="danger" id="wipe">WIPE SAVE</button></div>
+    <div class="dlabel">RENDER</div>
+    <div class="drow"><span class="dlabel" id="fps">FPS —</span></div>
   </div>
 `;
 
@@ -115,11 +119,35 @@ const el = {
   echoes: document.getElementById('echoes')!,
   recurse: document.getElementById('recurse') as HTMLButtonElement,
   stage: document.getElementById('stage')!,
-  feed: document.getElementById('feed')!,
+  canvas: document.getElementById('net') as HTMLCanvasElement,
   gens: document.getElementById('gens')!,
   toasts: document.getElementById('toasts')!,
   qty: document.getElementById('qty') as HTMLButtonElement,
+  fps: document.getElementById('fps')!,
 };
+
+// ─── Renderer ────────────────────────────────────────────────────────────────
+
+const net = new Network();
+net.bootstrap(state, performance.now());
+let renderer: NetworkRenderer | null = null;
+
+buildSprites().then((atlas) => {
+  renderer = new NetworkRenderer(el.canvas, state, net, atlas);
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>).__hm = { state, net, renderer, emitter };
+  }
+  const raf = (t: number) => {
+    renderer!.frame(t);
+    requestAnimationFrame(raf);
+  };
+  requestAnimationFrame(raf);
+  setInterval(() => {
+    el.fps.textContent = `FPS ${Math.round(renderer!.fps)}`;
+  }, 500);
+});
+
+window.addEventListener('resize', () => renderer?.resize());
 
 // ─── Toasts & pulse feed ─────────────────────────────────────────────────────
 
@@ -131,33 +159,20 @@ function toast(msg: string, kind: 'sync' | 'recursion' | '' = ''): void {
   setTimeout(() => t.remove(), 3200);
 }
 
-const feedLines: string[] = [];
-let feedDirty = false;
-function pushFeed(line: string): void {
-  feedLines.push(line);
-  if (feedLines.length > 6) feedLines.shift();
-  feedDirty = true;
-}
-
 emitter.on((e) => {
   switch (e.type) {
-    case 'pulse': {
-      const g = GENERATORS.find((x) => x.id === e.gen)!;
-      // Only surface slower, meaningful pulses in the feed (Neuron spam is the
-      // canvas renderer's job in session 2).
-      if (g.cycle >= 4 || e.overload) {
-        pushFeed(
-          e.overload
-            ? `<span class="gold">⚡ ${g.name} OVERLOAD +${fmtNum(e.amount)}</span>`
-            : `${g.name} +${fmtNum(e.amount)}`,
-        );
-      }
+    case 'pulse':
+      renderer?.onPulse(e.gen, e.amount, e.overload);
       break;
-    }
+    case 'purchase':
+      for (let i = 0; i < Math.min(e.qty, 4); i++) net.addNode(e.gen, performance.now());
+      break;
     case 'sync':
+      renderer?.onSync(e.gen, performance.now());
       toast(`SYNCHRONIZATION · ${e.gen.toUpperCase()} ×${e.multNow}`, 'sync');
       break;
     case 'recursion':
+      renderer?.onRecursion();
       toast(`RECURSION COMPLETE · +${e.gained} ECHOES`, 'recursion');
       break;
     case 'unlock':
@@ -170,13 +185,8 @@ emitter.on((e) => {
 
 el.stage.addEventListener('pointerdown', (ev) => {
   const v = impulse(state, emitter);
-  const f = document.createElement('div');
-  f.className = 'float';
-  f.textContent = `+${fmtNum(v)}`;
-  f.style.left = `${ev.offsetX}px`;
-  f.style.top = `${ev.offsetY}px`;
-  el.stage.appendChild(f);
-  setTimeout(() => f.remove(), 900);
+  const rect = el.stage.getBoundingClientRect();
+  renderer?.onImpulse(ev.clientX - rect.left, ev.clientY - rect.top, v);
 });
 
 // ─── Generator drawer ────────────────────────────────────────────────────────
@@ -321,10 +331,6 @@ function updateUI(): void {
     row.btn.classList.toggle('afford', state.sentience >= cost);
   }
 
-  if (feedDirty) {
-    el.feed.innerHTML = feedLines.join('<br>');
-    feedDirty = false;
-  }
 }
 
 // ─── Main loop ───────────────────────────────────────────────────────────────
