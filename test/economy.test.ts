@@ -56,17 +56,17 @@ describe('costs and purchases', () => {
 });
 
 describe('synchronization milestones', () => {
-  it('output doubles at 10 owned', () => {
+  it('output doubles at the first threshold (25 owned)', () => {
     const s = newState();
-    s.owned.neuron = 9;
-    const r9 = genRate(s, 'neuron');
-    s.owned.neuron = 10;
-    const r10 = genRate(s, 'neuron');
-    expect(r10 / r9).toBeCloseTo((10 / 9) * 2, 10);
+    s.owned.neuron = 24;
+    const r24 = genRate(s, 'neuron');
+    s.owned.neuron = 25;
+    const r25 = genRate(s, 'neuron');
+    expect(r25 / r24).toBeCloseTo((25 / 24) * 2, 10);
     expect(syncMult(s, 'neuron')).toBe(2);
   });
 
-  it('sync event fires on crossing a threshold', () => {
+  it('sync events fire on crossing thresholds', () => {
     const s = newState();
     s.sentience = 1e9;
     const emit = new Emitter();
@@ -74,8 +74,8 @@ describe('synchronization milestones', () => {
     emit.on((e) => {
       if (e.type === 'sync') syncs.push(e.milestone);
     });
-    buy(s, 'neuron', 26, emit);
-    expect(syncs).toEqual([10, 25]);
+    buy(s, 'neuron', 51, emit);
+    expect(syncs).toEqual([25, 50]);
   });
 });
 

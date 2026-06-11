@@ -57,17 +57,24 @@ node fires even in a 2-minute session.
 
 ## 3 · Synchronization milestones
 
-At 10/25/50/100/200/300/400/500 owned: fusion animation + that generator ×2
-permanently for the run (×256 at 500). Next milestone always visible
-("17/25 → ×4"). r is low early so counts climb and milestones pop constantly.
+At **25/50/100/200/300/400/500** owned: fusion animation + that generator ×2
+permanently for the run (×128 at 500). Next milestone always visible
+("17/25 → ×2"). r is low early so counts climb and milestones pop constantly.
+First milestone moved 10 → 25 (2026-06-12 playtest): the first fusion lands at
+~2.8 min as a real first goal; ECHO_DIVISOR recalibrated 50K → 10K to keep
+first recursion at ~40 min (currency-side compensation, growth pacing intact).
+
+**Fusion hierarchy:** each milestone fuses the current small nodes into one
+T2 node; every 3 settled T2s cascade-fuse into one T3. Never one big node
+with smalls attached.
 
 ## 4 · Impulse, Recursion & Echoes
 
 - **Impulse**: sealed economy. Base 1; grows only via Impulse web nodes and the
   Impulse card set. Never scales with the network.
 - **Recursion**: player-chosen, offered once projected gain ≥ 10 Echoes.
-- **Echoes = ⌊√(run earnings / 50,000)⌋** — sim-calibrated: active run 1 hits
-  45 Echoes at ~43 min.
+- **Echoes = ⌊√(run earnings / 10,000)⌋** — sim-calibrated for sync-at-25:
+  active run 1 hits 45 Echoes at ~40–42 min.
 - **Each held Echo: +2% global generation.** Echoes are ALSO the Echo Web
   currency — spending sacrifices the passive bonus. That tension is the
   prestige decision.

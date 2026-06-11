@@ -33,7 +33,7 @@ Idle/incremental game. Vanilla TS + Vite + Vitest, no framework. Mobile-first
 
 | Invariant | Test |
 |---|---|
-| First Synchronization ≤ 2.5 min (greedy bot) | pacing.test.ts |
+| First Synchronization ≤ 3 min (greedy bot; first threshold is 25) | pacing.test.ts |
 | 45 Echoes (first good Recursion) in 35–50 min (greedy bot) | pacing.test.ts |
 | Timed buff worth exactly face value on 1s and 90s cycles | economy.test.ts |
 | Offline(Δt) == live ticking of Δt | economy.test.ts |
@@ -67,6 +67,14 @@ If a deliberate rebalance moves a target, change the test AND the table in
   to seed; siblings edge to their hub (resolved per frame). Pings now run at
   the generator's TRUE cycle per node, phased by placement time (no rate
   stretching) — bootstrap scatters phases for loaded saves; comet cap 120.
+- **S2.3 (done, third playtest round):** REBALANCE: first sync 25 (was 10),
+  ECHO_DIVISOR 10K (was 50K) — sim-recalibrated, pacing gate now ≤3 min; test
+  + design.md updated in same commit. Comets travel real edges only, inward
+  (sibling→hub, hub→seed), colored by generator. Tiered fusion: smalls→T2,
+  3×T2 cascade→T3 (bootstrap honours hierarchy). Seed-centred camera, zoom
+  driven by radial extent (close-up start → pull-back as network grows).
+  Distinct evolving seed: orbiting arc rings, one per Recursion (cap 5),
+  eye-like core. PARKED for later: background palette evolving per Recursion.
 - S3: Recursion UX + Echo Web screen (engine support already present).
 - S4: cards (Archive) — plug into `overloadChance`/`genRate`/`genCost` seams.
 - S5: signals — ride the existing `ActiveBuff` system; add cooldown store.

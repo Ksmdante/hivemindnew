@@ -17,7 +17,8 @@ export interface NetNode {
   bornAt: number; // performance.now() ms — spawn pop-in
   /** next ambient ping (ms). 0 = renderer initialises to bornAt + cycle. */
   nextPingAt: number;
-  fusing: { tx: number; ty: number; startedAt: number; dur: number } | null;
+  /** target = resulting stage of the fusion this node is converging into. */
+  fusing: { tx: number; ty: number; startedAt: number; dur: number; target: number } | null;
 }
 
 const MAX_VISIBLE_PER_GEN = 28;
@@ -124,51 +125,80 @@ export class Network {
     return this.findFreeSpot(Math.cos(angle) * startDist, Math.sin(angle) * startDist, r);
   }
 
-  /** Synchronization: converge this class's nodes to their centroid, then
-   *  replace them with a single larger-stage node. Returns the centroid. */
-  startFusion(genId: string, syncs: number, now: number): { x: number; y: number } {
-    const group = this.perGen(genId);
-    if (group.length === 0) {
-      // nothing visible (e.g. loaded save) — just drop a fused node near seed
-      const n = this.addNode(genId, now);
-      if (n) n.stage = syncs >= 3 ? 2 : 1;
-      return { x: n?.x ?? 0, y: n?.y ?? 0 };
-    }
+  /** Push a fusion centroid out of the seed clearance zone if needed. */
+  private clampCentroid(cx: number, cy: number): { x: number; y: number } {
+    const d = Math.hypot(cx, cy);
+    if (d >= SEED_CLEARANCE + 8) return { x: cx, y: cy };
+    const k = (SEED_CLEARANCE + 16) / Math.max(d, 1);
+    return { x: cx * k, y: cy * k };
+  }
+
+  private startFusionOf(group: NetNode[], target: number, now: number): { x: number; y: number } {
     let cx = 0;
     let cy = 0;
     for (const n of group) {
       cx += n.x;
       cy += n.y;
     }
-    cx /= group.length;
-    cy /= group.length;
+    const c = this.clampCentroid(cx / group.length, cy / group.length);
     for (const n of group) {
-      n.fusing = { tx: cx, ty: cy, startedAt: now, dur: 700 };
+      n.fusing = { tx: c.x, ty: c.y, startedAt: now, dur: 700, target };
     }
-    return { x: cx, y: cy };
+    return c;
   }
 
-  /** Complete any finished fusions; returns ids of newly created fused nodes. */
-  settleFusions(state: GameState, now: number): NetNode[] {
-    const created: NetNode[] = [];
-    const done = new Set<string>();
-    for (const n of this.nodes) {
-      if (n.fusing && now >= n.fusing.startedAt + n.fusing.dur) done.add(n.gen);
+  /** Synchronization: the current small (stage-0) nodes converge into one T2.
+   *  T3s come from cascades — see maybeCascade. */
+  startFusion(genId: string, now: number): { x: number; y: number } {
+    const smalls = this.perGen(genId).filter((n) => !n.fusing && n.stage === 0);
+    if (smalls.length < 2) {
+      // nothing meaningful on canvas (e.g. fresh load) — spawn a T2 directly
+      const n = this.addNode(genId, now);
+      if (n) n.stage = 1;
+      return { x: n?.x ?? 0, y: n?.y ?? 0 };
     }
-    for (const genId of done) {
-      const group = this.perGen(genId).filter(
-        (n) => n.fusing && now >= n.fusing.startedAt + n.fusing.dur,
+    return this.startFusionOf(smalls, 1, now);
+  }
+
+  /** Hierarchy rule: whenever a class holds 3 settled T2 nodes, the three
+   *  fuse into one T3 — multiple T2s become a T3, never one big node with
+   *  smalls attached. */
+  private maybeCascade(genId: string, now: number): void {
+    const t2s = this.perGen(genId).filter((n) => !n.fusing && n.stage === 1);
+    if (t2s.length >= 3) {
+      const oldest = t2s.sort((a, b) => a.id - b.id).slice(0, 3);
+      this.startFusionOf(oldest, 2, now);
+    }
+  }
+
+  /** Complete any finished fusions; returns newly created fused nodes. */
+  settleFusions(_state: GameState, now: number): NetNode[] {
+    const created: NetNode[] = [];
+    const doneKeys = new Set<string>();
+    for (const n of this.nodes) {
+      if (n.fusing && now >= n.fusing.startedAt + n.fusing.dur) {
+        doneKeys.add(`${n.gen}:${n.fusing.target}`);
+      }
+    }
+    for (const key of doneKeys) {
+      const [genId, targetStr] = key.split(':');
+      const target = Number(targetStr);
+      const group = this.nodes.filter(
+        (n) =>
+          n.gen === genId &&
+          n.fusing &&
+          n.fusing.target === target &&
+          now >= n.fusing.startedAt + n.fusing.dur,
       );
       if (group.length === 0) continue;
       const { tx, ty } = group[0].fusing!;
       this.nodes = this.nodes.filter((n) => !group.includes(n));
-      const syncs = syncCount(state, genId);
       const fused: NetNode = {
         id: this.nextId++,
         gen: genId,
         x: tx,
         y: ty,
-        stage: syncs >= 3 ? 2 : 1,
+        stage: Math.min(2, target),
         phase: Math.random() * Math.PI * 2,
         bornAt: now,
         nextPingAt: 0,
@@ -176,20 +206,29 @@ export class Network {
       };
       this.nodes.push(fused);
       created.push(fused);
+      if (target === 1) this.maybeCascade(genId, now);
     }
     return created;
   }
 
-  /** Rebuild a plausible network from a loaded save's owned counts. */
+  /** Rebuild a plausible network from a loaded save's owned counts,
+   *  honouring the fusion hierarchy: each sync produced a T2; every 3 T2s
+   *  became a T3. */
   bootstrap(state: GameState, now: number): void {
     this.reset();
     for (const g of GENERATORS) {
       const owned = state.owned[g.id] ?? 0;
       if (owned <= 0) continue;
       const syncs = syncCount(state, g.id);
-      if (syncs > 0) {
-        const fused = this.addNode(g.id, now);
-        if (fused) fused.stage = syncs >= 3 ? 2 : 1;
+      const t3s = Math.floor(syncs / 3);
+      const t2s = syncs % 3;
+      for (let i = 0; i < t3s; i++) {
+        const n = this.addNode(g.id, now);
+        if (n) n.stage = 2;
+      }
+      for (let i = 0; i < t2s; i++) {
+        const n = this.addNode(g.id, now);
+        if (n) n.stage = 1;
       }
       const lastThreshold = syncs > 0 ? SYNC_THRESHOLDS[syncs - 1] : 0;
       const smalls = Math.min(owned - lastThreshold, 12);

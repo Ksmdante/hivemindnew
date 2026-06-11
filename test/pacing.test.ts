@@ -77,9 +77,12 @@ function greedyBot(maxSec: number): BotResult {
 describe('pacing (greedy bot on the real engine)', () => {
   const result = greedyBot(60 * 60); // give it up to an hour of sim time
 
-  it('first Synchronization within 2.5 minutes', () => {
+  it('first Synchronization within 3 minutes', () => {
+    // Gate moved 2.5 → 3 min when the first sync threshold moved 10 → 25:
+    // the first fusion is now a real early goal (~2.8 min) instead of firing
+    // before the player understands the mechanic.
     expect(result.firstSyncSec).not.toBeNull();
-    expect(result.firstSyncSec!).toBeLessThanOrEqual(150);
+    expect(result.firstSyncSec!).toBeLessThanOrEqual(180);
   });
 
   it('45 Echoes (first good Recursion) between 35 and 50 minutes', () => {

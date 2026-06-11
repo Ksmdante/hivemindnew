@@ -36,12 +36,19 @@ export const GEN_BY_ID: Record<string, GenDef> = Object.fromEntries(
   GENERATORS.map((g) => [g.id, g]),
 );
 
-/** Synchronization milestones: at these owned counts, output ×2 (permanent for the run). */
-export const SYNC_THRESHOLDS = [10, 25, 50, 100, 200, 300, 400, 500] as const;
+/** Synchronization milestones: at these owned counts, output ×2 (permanent for
+ *  the run). First milestone at 25 (AdCap-style): the first fusion lands at
+ *  ~90s as a real first goal instead of firing before the player understands
+ *  the mechanic. Visual hierarchy: each milestone fuses the current small
+ *  nodes into a T2; every 3 T2s fuse into a T3. */
+export const SYNC_THRESHOLDS = [25, 50, 100, 200, 300, 400, 500] as const;
 
 /** Echo formula divisor — Echoes gained = floor(sqrt(lifetimeRun / ECHO_DIVISOR)).
- *  Calibrated by simulation: active run 1 hits 45 Echoes at ~43 min. */
-export const ECHO_DIVISOR = 50_000;
+ *  Calibrated by simulation FOR SYNC_THRESHOLDS starting at 25: active run 1
+ *  hits 45 Echoes at ~40-42 min. (Was 50_000 when the first sync was at 10 —
+ *  losing that early ×2 on every class slowed run 1, compensated here on the
+ *  currency side so network growth pacing itself is unchanged.) */
+export const ECHO_DIVISOR = 10_000;
 
 /** Each held Echo grants +2% global generation. */
 export const ECHO_BONUS_PER = 0.02;

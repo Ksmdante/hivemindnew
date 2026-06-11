@@ -18,6 +18,8 @@ interface Comet {
   y0: number;
   cx: number;
   cy: number; // bezier control
+  tx: number;
+  ty: number; // target — always the other end of a real edge (hub or seed)
   t: number;
   dur: number; // seconds
   color: string;
@@ -132,31 +134,46 @@ export class NetworkRenderer {
     if (overload) {
       const sources = this.net.perGen(genId).filter((n) => !n.fusing);
       const s = sources[Math.floor(Math.random() * sources.length)];
-      if (s) this.spawnComet(s.x, s.y, GOLD, true, amount, true);
+      if (s) this.spawnComet(s, GOLD, true, amount, true);
       return;
     }
     if (g.cycle >= 4) {
       this.seedFlash = Math.max(this.seedFlash, 0.4);
-      this.floats.push({ x: 0, y: -14, age: 0, text: `+${fmtNum(amount)}`, color: '#bfe3ff' });
+      this.floats.push({ x: 0, y: -14, age: 0, text: `+${fmtNum(amount)}`, color: g.color });
     }
   }
 
+  /** Comets always travel a real edge, inward: sibling → its class hub,
+   *  hub → seed. */
   private spawnComet(
-    x: number,
-    y: number,
+    from: { x: number; y: number; gen?: string; id?: number },
     color: string,
     overload: boolean,
     amount: number,
     showFloat: boolean,
   ): void {
     if (this.comets.length > 120) return;
-    const px = -y * 0.25;
-    const py = x * 0.25;
+    let tx = 0;
+    let ty = 0;
+    if (from.gen) {
+      const hub = this.net.hubOf(from.gen);
+      if (hub && hub.id !== from.id) {
+        tx = hub.x;
+        ty = hub.y;
+      } // hub itself (or no hub) → fires inward to the seed
+    }
+    const mx = (from.x + tx) / 2;
+    const my = (from.y + ty) / 2;
+    const dx = tx - from.x;
+    const dy = ty - from.y;
+    const bend = (Math.random() - 0.5) * 0.5;
     this.comets.push({
-      x0: x,
-      y0: y,
-      cx: x / 2 + px * (Math.random() - 0.5) * 2,
-      cy: y / 2 + py * (Math.random() - 0.5) * 2,
+      x0: from.x,
+      y0: from.y,
+      cx: mx - dy * bend,
+      cy: my + dx * bend,
+      tx,
+      ty,
       t: 0,
       dur: 0.55 + Math.random() * 0.2,
       color,
@@ -181,7 +198,7 @@ export class NetworkRenderer {
           // hidden-tab catch-up: keep the original phase, skip missed beats
           n.nextPingAt += Math.ceil((nowMs - n.nextPingAt) / vc) * vc;
         } else {
-          this.spawnComet(n.x, n.y, g.color, false, 0, false);
+          this.spawnComet(n, g.color, false, 0, false);
           n.nextPingAt += vc;
         }
       }
@@ -202,7 +219,7 @@ export class NetworkRenderer {
   }
 
   onSync(genId: string, now: number): void {
-    const { x, y } = this.net.startFusion(genId, 0, now);
+    const { x, y } = this.net.startFusion(genId, now);
     this.ripples.push({ x, y, age: 0, dur: 0.9, maxR: 90, color: GEN_BY_ID[genId].color, width: 2 });
     this.punch = 0.05;
   }
@@ -291,20 +308,21 @@ export class NetworkRenderer {
     }
   }
 
+  /** Seed-centred camera: the core never leaves the middle of the frame.
+   *  Zoom is driven by the network's radial extent — starts close-in on the
+   *  lone seed and pulls back as the network grows complex. */
   private updateCamera(dt: number, nowMs: number): void {
-    let minX = -120, maxX = 120, minY = -120, maxY = 120;
+    let maxR = 110; // close-up framing while the network is tiny
     for (const n of this.net.nodes) {
-      if (n.x < minX) minX = n.x;
-      if (n.x > maxX) maxX = n.x;
-      if (n.y < minY) minY = n.y;
-      if (n.y > maxY) maxY = n.y;
+      const r = Math.hypot(n.x, n.y) + 30;
+      if (r > maxR) maxR = r;
     }
-    const margin = 60;
-    const spanX = maxX - minX + margin * 2;
-    const spanY = maxY - minY + margin * 2;
-    const targetScale = Math.max(0.45, Math.min(1.6, Math.min(this.w / spanX, this.h / spanY)));
-    const tx = (minX + maxX) / 2 + Math.sin(nowMs / 9000) * 6;
-    const ty = (minY + maxY) / 2 + Math.cos(nowMs / 11000) * 6;
+    const targetScale = Math.max(
+      0.28,
+      Math.min(2.0, Math.min(this.w, this.h) / (2 * (maxR + 50))),
+    );
+    const tx = Math.sin(nowMs / 9000) * 5;
+    const ty = Math.cos(nowMs / 11000) * 5;
     const k = 1 - Math.pow(0.04, dt);
     this.camX += (tx - this.camX) * k;
     this.camY += (ty - this.camY) * k;
@@ -397,19 +415,50 @@ export class NetworkRenderer {
     }
   }
 
+  /** The core — visually unlike any generator, always centre frame, and it
+   *  transforms with Recursions: each recursion adds an orbiting arc ring,
+   *  alternating direction, so the seed literally grows another layer of
+   *  self every rebirth. */
   private drawSeed(ctx: CanvasRenderingContext2D, nowMs: number, dt: number): void {
     const breathe = 1 + 0.1 * Math.sin(nowMs / 1100);
     const flash = this.seedFlash;
     this.seedFlash *= Math.pow(0.02, dt);
+    const recursions = this.state.recursions;
+
     ctx.globalCompositeOperation = 'lighter';
-    const gs = (34 + flash * 30) * breathe;
-    ctx.globalAlpha = 0.8;
+    const gs = (38 + flash * 30 + recursions * 3) * breathe;
+    ctx.globalAlpha = 0.85;
     ctx.drawImage(this.accentGlow, -gs / 2, -gs / 2, gs, gs);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#dff2ff';
+
+    // Orbiting arc rings — one per recursion (capped at 5 visual layers)
+    const rings = Math.min(recursions, 5);
+    for (let i = 0; i < rings; i++) {
+      const radius = 9 + i * 4.5;
+      const dir = i % 2 === 0 ? 1 : -1;
+      const rot = (nowMs / (2600 + i * 900)) * dir;
+      const arcs = 2 + (i % 2);
+      ctx.strokeStyle = i === rings - 1 ? '#f57cd4' : '#9bd6ff';
+      ctx.globalAlpha = 0.55 - i * 0.06;
+      ctx.lineWidth = 1.1 / this.camScale;
+      for (let a = 0; a < arcs; a++) {
+        const start = rot + (a / arcs) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * breathe, start, start + Math.PI / (arcs * 0.9));
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // Core: bright centre with a dark pupil — reads as an eye, not a node
+    ctx.fillStyle = '#eaf6ff';
     ctx.beginPath();
-    ctx.arc(0, 0, 3.4 * breathe + flash * 1.6, 0, Math.PI * 2);
+    ctx.arc(0, 0, (4.2 + recursions * 0.3) * breathe + flash * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0a0f22';
+    ctx.beginPath();
+    ctx.arc(0, 0, (1.5 + recursions * 0.12) * breathe, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -422,12 +471,12 @@ export class NetworkRenderer {
       c.t += dt / c.dur;
       const t = Math.min(1, c.t);
       const e = t * t * (3 - 2 * t); // smoothstep
-      // Quadratic bezier from (x0,y0) via (cx,cy) to seed (0,0)
+      // Quadratic bezier along the edge: (x0,y0) → control → (tx,ty)
       const bez = (tt: number) => {
         const u = 1 - tt;
         return {
-          x: u * u * c.x0 + 2 * u * tt * c.cx,
-          y: u * u * c.y0 + 2 * u * tt * c.cy,
+          x: u * u * c.x0 + 2 * u * tt * c.cx + tt * tt * c.tx,
+          y: u * u * c.y0 + 2 * u * tt * c.cy + tt * tt * c.ty,
         };
       };
       const head = bez(e);
@@ -450,17 +499,18 @@ export class NetworkRenderer {
     }
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    // arrivals
+    // arrivals — seed arrivals flash the core; hub arrivals stay quiet
     for (const c of this.comets) {
       if (c.t >= 1) {
-        this.seedFlash = Math.max(this.seedFlash, c.overload ? 0.9 : 0.35);
+        const atSeed = c.tx === 0 && c.ty === 0;
+        if (atSeed) this.seedFlash = Math.max(this.seedFlash, c.overload ? 0.9 : 0.3);
         if (c.showFloat) {
           this.floats.push({
-            x: 0,
-            y: -14,
+            x: c.tx,
+            y: c.ty - 14,
             age: 0,
             text: `+${fmtNum(c.amount)}`,
-            color: c.overload ? GOLD : '#bfe3ff',
+            color: c.overload ? GOLD : c.color,
           });
         }
       }
