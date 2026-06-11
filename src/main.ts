@@ -46,7 +46,10 @@ function loadState(): GameState {
 
 const state = loadState();
 
+let saveWiped = false;
+
 function persist(): void {
+  if (saveWiped) return; // reset in progress — beforeunload must not resave
   state.lastSeenWallMs = Date.now();
   try {
     localStorage.setItem(SAVE_KEY, serialize(state));
@@ -310,6 +313,7 @@ document.getElementById('devpanel')!.addEventListener('click', (ev) => {
     toast('ALL ARCHITECTURES UNLOCKED');
   }
   if (b.id === 'wipe') {
+    saveWiped = true;
     localStorage.removeItem(SAVE_KEY);
     location.reload();
   }
