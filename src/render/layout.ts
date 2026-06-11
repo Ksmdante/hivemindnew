@@ -16,13 +16,16 @@ export interface NetNode {
   stage: number; // visual stage 0/1/2
   phase: number; // breathing offset
   bornAt: number; // performance.now() ms — spawn pop-in
+  /** next ambient ping (ms). 0 = renderer initialises to bornAt + cycle. */
+  nextPingAt: number;
   parentX: number;
   parentY: number;
   fusing: { tx: number; ty: number; startedAt: number; dur: number } | null;
 }
 
 const MAX_VISIBLE_PER_GEN = 28;
-const MIN_DIST = 15;
+/** Collision radius per visual stage — matches the sprites' drawn extent. */
+export const NODE_RADIUS = [13, 19, 27];
 
 export class Network {
   nodes: NetNode[] = [];
@@ -49,36 +52,51 @@ export class Network {
     const ax = anchor ? anchor.x : 0;
     const ay = anchor ? anchor.y : 0;
 
-    let x = ax;
-    let y = ay;
-    for (let attempt = 0; attempt < 12; attempt++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 26 + Math.random() * 18 + attempt * 2;
-      const cx = ax + Math.cos(angle) * dist;
-      const cy = ay + Math.sin(angle) * dist;
-      if (this.nodes.every((n) => (n.x - cx) ** 2 + (n.y - cy) ** 2 > MIN_DIST ** 2)) {
-        x = cx;
-        y = cy;
-        break;
-      }
-      x = cx;
-      y = cy; // last attempt wins even if crowded
-    }
-
+    const spot = this.findFreeSpot(ax, ay, NODE_RADIUS[0]);
     const node: NetNode = {
       id: this.nextId++,
       gen: genId,
-      x,
-      y,
+      x: spot.x,
+      y: spot.y,
       stage: 0,
       phase: Math.random() * Math.PI * 2,
       bornAt: now,
+      nextPingAt: 0,
       parentX: ax,
       parentY: ay,
       fusing: null,
     };
     this.nodes.push(node);
     return node;
+  }
+
+  private collides(x: number, y: number, r: number): boolean {
+    for (const n of this.nodes) {
+      const min = r + NODE_RADIUS[n.stage] - 4; // slight halo overlap is fine
+      if ((n.x - x) ** 2 + (n.y - y) ** 2 < min * min) return true;
+    }
+    return false;
+  }
+
+  /** Random placement near an anchor with real collision avoidance; falls
+   *  back to a golden-angle spiral that is guaranteed to find open space. */
+  private findFreeSpot(ax: number, ay: number, r: number): { x: number; y: number } {
+    for (let attempt = 0; attempt < 18; attempt++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 30 + Math.random() * 16 + attempt * 2;
+      const cx = ax + Math.cos(angle) * dist;
+      const cy = ay + Math.sin(angle) * dist;
+      if (!this.collides(cx, cy, r)) return { x: cx, y: cy };
+    }
+    const GOLDEN = 2.39996;
+    for (let k = 1; k < 200; k++) {
+      const dist = 30 + k * 4.5;
+      const angle = k * GOLDEN;
+      const cx = ax + Math.cos(angle) * dist;
+      const cy = ay + Math.sin(angle) * dist;
+      if (!this.collides(cx, cy, r)) return { x: cx, y: cy };
+    }
+    return { x: ax + 30, y: ay + 30 }; // unreachable in practice
   }
 
   /** Synchronization: converge this class's nodes to their centroid, then
@@ -128,6 +146,7 @@ export class Network {
         stage: syncs >= 3 ? 2 : 1,
         phase: Math.random() * Math.PI * 2,
         bornAt: now,
+        nextPingAt: 0,
         parentX: 0,
         parentY: 0,
         fusing: null,

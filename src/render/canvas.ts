@@ -122,30 +122,81 @@ export class NetworkRenderer {
 
   // ─── Event hooks (wired by the shell) ─────────────────────────────────────
 
+  /** Engine class-pulse = the income truth: seed flash + floating "+N" for
+   *  meaningful payouts, gold comet on overloads. Ambient comets come from
+   *  the per-node ping scheduler in frame() — staggered by purchase time, so
+   *  the network pings constantly instead of firing all at once. The split is
+   *  visual only; the economy is untouched (same integral, smaller variance). */
   onPulse(genId: string, amount: number, overload: boolean): void {
     const g = GEN_BY_ID[genId];
-    const sources = this.net.perGen(genId).filter((n) => !n.fusing);
-    if (sources.length === 0) return;
-    const showFloat = overload || g.cycle >= 4;
-    const count = Math.min(sources.length, overload ? 4 : 2);
-    if (this.comets.length > 90) return;
-    for (let i = 0; i < count; i++) {
+    if (overload) {
+      const sources = this.net.perGen(genId).filter((n) => !n.fusing);
       const s = sources[Math.floor(Math.random() * sources.length)];
-      const mx = s.x / 2;
-      const my = s.y / 2;
-      const px = -(s.y - 0) * 0.25;
-      const py = (s.x - 0) * 0.25;
-      this.comets.push({
-        x0: s.x,
-        y0: s.y,
-        cx: mx + px * (Math.random() - 0.5) * 2,
-        cy: my + py * (Math.random() - 0.5) * 2,
-        t: 0,
-        dur: 0.55 + Math.random() * 0.2,
-        color: overload ? GOLD : g.color,
-        overload,
-        amount,
-        showFloat: i === 0 && showFloat,
+      if (s) this.spawnComet(s.x, s.y, GOLD, true, amount, true);
+      return;
+    }
+    if (g.cycle >= 4) {
+      this.seedFlash = Math.max(this.seedFlash, 0.4);
+      this.floats.push({ x: 0, y: -14, age: 0, text: `+${fmtNum(amount)}`, color: '#bfe3ff' });
+    }
+  }
+
+  private spawnComet(
+    x: number,
+    y: number,
+    color: string,
+    overload: boolean,
+    amount: number,
+    showFloat: boolean,
+  ): void {
+    if (this.comets.length > 70) return;
+    const px = -y * 0.25;
+    const py = x * 0.25;
+    this.comets.push({
+      x0: x,
+      y0: y,
+      cx: x / 2 + px * (Math.random() - 0.5) * 2,
+      cy: y / 2 + py * (Math.random() - 0.5) * 2,
+      t: 0,
+      dur: 0.55 + Math.random() * 0.2,
+      color,
+      overload,
+      amount,
+      showFloat,
+    });
+  }
+
+  /** Per-node ambient pings: each visual node fires on its own cycle, phased
+   *  from when it was born. Visual cycle stretches when a class has many
+   *  nodes so total ping rate per class stays ~bounded. */
+  private schedulePings(nowMs: number): void {
+    const counts = new Map<string, number>();
+    for (const n of this.net.nodes) {
+      if (!n.fusing) counts.set(n.gen, (counts.get(n.gen) ?? 0) + 1);
+    }
+    for (const n of this.net.nodes) {
+      if (n.fusing) continue;
+      const g = GEN_BY_ID[n.gen];
+      const count = counts.get(n.gen) ?? 1;
+      const vc = g.cycle * Math.max(1, count / 6) * 1000;
+      if (n.nextPingAt === 0) n.nextPingAt = n.bornAt + g.cycle * 1000;
+      if (nowMs >= n.nextPingAt) {
+        if (nowMs - n.nextPingAt > vc * 2) n.nextPingAt = nowMs; // hidden-tab catch-up
+        this.spawnComet(n.x, n.y, g.color, false, 0, false);
+        n.nextPingAt += vc;
+      }
+    }
+  }
+
+  /** Purchase landed while at the visual node cap — acknowledge on an
+   *  existing node instead of silently doing nothing. */
+  pingGen(genId: string): void {
+    const sources = this.net.perGen(genId).filter((n) => !n.fusing);
+    const s = sources[Math.floor(Math.random() * sources.length)];
+    if (s) {
+      this.ripples.push({
+        x: s.x, y: s.y, age: 0, dur: 0.45, maxR: 26,
+        color: GEN_BY_ID[genId].color, width: 1.2,
       });
     }
   }
@@ -189,6 +240,7 @@ export class NetworkRenderer {
       this.ripples.push({ x: f.x, y: f.y, age: 0, dur: 0.7, maxR: 60, color: GEN_BY_ID[f.gen].color, width: 2 });
     }
 
+    this.schedulePings(nowMs);
     this.updateCamera(dt, nowMs);
 
     const ctx = this.ctx;
@@ -363,16 +415,16 @@ export class NetworkRenderer {
       };
       const head = bez(e);
       // trail
-      const TRAIL = 5;
+      const TRAIL = c.overload ? 6 : 4;
       for (let i = 1; i <= TRAIL; i++) {
         const tt = Math.max(0, e - i * 0.035);
         const p = bez(tt);
-        ctx.globalAlpha = (1 - i / (TRAIL + 1)) * 0.35;
-        const s = (c.overload ? 14 : 9) * (1 - i / (TRAIL + 2));
+        ctx.globalAlpha = (1 - i / (TRAIL + 1)) * 0.32;
+        const s = (c.overload ? 14 : 8) * (1 - i / (TRAIL + 2));
         ctx.drawImage(glowFor(c), p.x - s / 2, p.y - s / 2, s, s);
       }
       ctx.globalAlpha = 0.9;
-      const hs = c.overload ? 20 : 13;
+      const hs = c.overload ? 20 : 11;
       ctx.drawImage(glowFor(c), head.x - hs / 2, head.y - hs / 2, hs, hs);
       ctx.fillStyle = c.overload ? GOLD : '#eaf6ff';
       ctx.beginPath();

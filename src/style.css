@@ -44,8 +44,17 @@ body {
   padding: 5px 10px;
   border-radius: 4px;
   cursor: pointer;
+  animation: recursePulse 2.2s ease-in-out infinite;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.btn-recurse.armed { background: var(--magenta); color: #05060f; }
+.btn-recurse:active { transform: scale(0.96); }
+.btn-recurse.armed { background: var(--magenta); color: #05060f; animation: none; }
+@keyframes recursePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 124, 212, 0); }
+  50% { box-shadow: 0 0 12px 1px rgba(245, 124, 212, 0.35); }
+}
+.btn-qty:active, .devbtn:active, .devpanel button:active { transform: scale(0.95); }
+.btn-qty, .devbtn, .devpanel button { transition: border-color 0.15s ease, color 0.15s ease; }
 .hidden { display: none !important; }
 
 /* Stage (tap target — canvas renderer replaces this in session 2) */
@@ -68,8 +77,9 @@ body {
 .drawer-head .label { color: var(--dim); font-size: 11px; letter-spacing: 2px; }
 .btn-qty { margin-left: auto; background: transparent; border: 1px solid var(--hairline); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
 
-.gen { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 14px; border-bottom: 1px solid var(--hairline); align-items: center; }
-.gen .name { font-size: 13px; }
+.gen { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; padding: 11px 14px 13px; border-bottom: 1px solid var(--hairline); align-items: center; }
+.gen .name { font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.gen .name .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px currentColor; flex: none; }
 .gen .name .owned { color: var(--dim); }
 .gen .sub { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
 .gen .sub .sync { color: var(--accent); }
@@ -77,12 +87,16 @@ body {
   grid-column: 2;
   grid-row: 1 / span 2;
   background: transparent; border: 1px solid var(--hairline); color: var(--text);
-  font-family: var(--mono); font-size: 12px; min-width: 96px; padding: 8px 10px;
-  border-radius: 5px; cursor: pointer; text-align: right; font-variant-numeric: tabular-nums;
+  font-family: var(--mono); font-size: 12px; min-width: 96px; padding: 9px 10px;
+  border-radius: 6px; cursor: pointer; text-align: right; font-variant-numeric: tabular-nums;
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
 }
-.gen .buy.afford { border-color: var(--accent); color: var(--accent); }
+.gen .buy.afford { border-color: var(--accent); color: var(--accent); background: rgba(93, 202, 254, 0.06); }
+.gen .buy:active:not(:disabled) { transform: scale(0.96); }
 .gen.locked { opacity: 0.38; }
 .gen .buy:disabled { cursor: default; }
+.syncbar { position: absolute; left: 14px; right: 14px; bottom: 5px; height: 2px; background: rgba(28, 36, 64, 0.8); border-radius: 1px; overflow: hidden; }
+.syncbar i { display: block; height: 100%; width: 0%; border-radius: 1px; opacity: 0.75; transition: width 0.3s ease; }
 
 /* Toasts */
 .toasts { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 50; pointer-events: none; }

@@ -54,6 +54,13 @@ If a deliberate rebalance moves a target, change the test AND the table in
   sizing, FPS in dev panel, `window.__hm` dev handle (DEV builds only).
   **Still owed from S2 scope:** local mono font, grain pass, on-device 60fps
   check (do during S7 polish / S9 QA).
+- **S2.1 feel fixes (done, from first playtest feedback):** per-node ambient
+  ping scheduler (each visual node fires comets on its own cycle, phased from
+  bornAt; engine class-pulses remain the income truth — seed flash/floats/
+  overloads only; balance-neutral by construction). Real collision avoidance
+  with per-stage radii + golden-angle fallback (no more stacked nodes). UI:
+  per-row sync progress bars, generator color dots, press states, transitions,
+  recurse-button pulse. Visual cap purchases now acknowledge via node ripple.
 - S3: Recursion UX + Echo Web screen (engine support already present).
 - S4: cards (Archive) — plug into `overloadChance`/`genRate`/`genCost` seams.
 - S5: signals — ride the existing `ActiveBuff` system; add cooldown store.

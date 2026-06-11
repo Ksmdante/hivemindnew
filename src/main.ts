@@ -164,9 +164,14 @@ emitter.on((e) => {
     case 'pulse':
       renderer?.onPulse(e.gen, e.amount, e.overload);
       break;
-    case 'purchase':
-      for (let i = 0; i < Math.min(e.qty, 4); i++) net.addNode(e.gen, performance.now());
+    case 'purchase': {
+      let added = 0;
+      for (let i = 0; i < Math.min(e.qty, 4); i++) {
+        if (net.addNode(e.gen, performance.now())) added++;
+      }
+      if (added === 0) renderer?.pingGen(e.gen); // at visual cap — still acknowledge
       break;
+    }
     case 'sync':
       renderer?.onSync(e.gen, performance.now());
       toast(`SYNCHRONIZATION · ${e.gen.toUpperCase()} ×${e.multNow}`, 'sync');
@@ -203,6 +208,7 @@ interface GenRow {
   name: HTMLElement;
   sub: HTMLElement;
   btn: HTMLButtonElement;
+  bar: HTMLElement;
 }
 const rows = new Map<string, GenRow>();
 
@@ -210,9 +216,10 @@ for (const g of GENERATORS) {
   const root = document.createElement('div');
   root.className = 'gen';
   root.innerHTML = `
-    <div class="name">${g.name} <span class="owned"></span></div>
+    <div class="name"><i class="dot" style="background:${g.color}"></i>${g.name} <span class="owned"></span></div>
     <button class="buy"></button>
     <div class="sub"></div>
+    <div class="syncbar"><i style="background:${g.color}"></i></div>
   `;
   const btn = root.querySelector('.buy') as HTMLButtonElement;
   btn.addEventListener('click', () => {
@@ -225,6 +232,7 @@ for (const g of GENERATORS) {
     name: root.querySelector('.name .owned')!,
     sub: root.querySelector('.sub')!,
     btn,
+    bar: root.querySelector('.syncbar i')!,
   });
 }
 
@@ -315,6 +323,7 @@ function updateUI(): void {
       row.btn.textContent = '—';
       row.btn.disabled = true;
       row.btn.classList.remove('afford');
+      row.bar.style.width = '0%';
       continue;
     }
     const owned = state.owned[g.id] ?? 0;
@@ -329,6 +338,10 @@ function updateUI(): void {
     row.btn.textContent = `${qtyMode === 'max' ? `×${qty} ` : ''}${fmtNum(cost)}`;
     row.btn.disabled = state.sentience < genCost(state, g.id);
     row.btn.classList.toggle('afford', state.sentience >= cost);
+    const nextT = SYNC_THRESHOLDS.find((t) => owned < t);
+    const prevT = SYNC_THRESHOLDS.filter((t) => owned >= t).pop() ?? 0;
+    const pct = nextT ? ((owned - prevT) / (nextT - prevT)) * 100 : 100;
+    row.bar.style.width = `${Math.max(0, Math.min(100, pct)).toFixed(1)}%`;
   }
 
 }
