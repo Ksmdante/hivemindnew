@@ -1,0 +1,126 @@
+/* Session 0/1 shell styling — functional placeholder. The premium visual
+   pass (design.md §11: canvas renderer, glow, parallax) is session 2. */
+
+:root {
+  --bg: #05060f;
+  --panel: rgba(13, 16, 32, 0.72);
+  --hairline: #1c2440;
+  --text: #c8d4ee;
+  --dim: #5a678c;
+  --accent: #5dcafe;
+  --gold: #f5c441;
+  --magenta: #f57cd4;
+  --mono: ui-monospace, 'Cascadia Mono', Consolas, 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  overscroll-behavior: none;
+  user-select: none;
+}
+
+#app { display: flex; flex-direction: column; height: 100dvh; max-width: 520px; margin: 0 auto; }
+
+/* HUD */
+.hud { padding: 14px 16px 10px; border-bottom: 1px solid var(--hairline); }
+.hud .sent { font-size: 30px; font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
+.hud .rate { color: var(--dim); font-size: 12px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.hud .echoline { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; }
+.hud .echoes { color: var(--magenta); }
+.btn-recurse {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid var(--magenta);
+  color: var(--magenta);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-recurse.armed { background: var(--magenta); color: #05060f; }
+.hidden { display: none !important; }
+
+/* Stage (tap target — canvas renderer replaces this in session 2) */
+.stage {
+  flex: 1;
+  min-height: 30dvh;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+.stage .seed {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 24px 6px rgba(93, 202, 254, 0.35);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+@keyframes breathe { 0%,100% { transform: scale(1); opacity: .85; } 50% { transform: scale(1.18); opacity: 1; } }
+.stage .hint { position: absolute; bottom: 10px; width: 100%; text-align: center; color: var(--dim); font-size: 11px; letter-spacing: 2px; }
+.feed {
+  position: absolute; top: 8px; left: 12px; right: 12px;
+  font-size: 11px; color: var(--dim); line-height: 1.5;
+  pointer-events: none;
+}
+.feed .gold { color: var(--gold); }
+.float {
+  position: absolute; color: var(--accent); font-size: 13px; pointer-events: none;
+  animation: floatUp 0.9s ease-out forwards;
+}
+@keyframes floatUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-36px); } }
+
+/* Generator drawer */
+.drawer { border-top: 1px solid var(--hairline); background: var(--panel); backdrop-filter: blur(8px); max-height: 46dvh; overflow-y: auto; }
+.drawer-head { display: flex; align-items: center; padding: 8px 14px; gap: 8px; position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--hairline); }
+.drawer-head .label { color: var(--dim); font-size: 11px; letter-spacing: 2px; }
+.btn-qty { margin-left: auto; background: transparent; border: 1px solid var(--hairline); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 4px; cursor: pointer; }
+
+.gen { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 14px; border-bottom: 1px solid var(--hairline); align-items: center; }
+.gen .name { font-size: 13px; }
+.gen .name .owned { color: var(--dim); }
+.gen .sub { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.gen .sub .sync { color: var(--accent); }
+.gen .buy {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  background: transparent; border: 1px solid var(--hairline); color: var(--text);
+  font-family: var(--mono); font-size: 12px; min-width: 96px; padding: 8px 10px;
+  border-radius: 5px; cursor: pointer; text-align: right; font-variant-numeric: tabular-nums;
+}
+.gen .buy.afford { border-color: var(--accent); color: var(--accent); }
+.gen.locked { opacity: 0.38; }
+.gen .buy:disabled { cursor: default; }
+
+/* Toasts */
+.toasts { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 50; pointer-events: none; }
+.toast {
+  background: var(--panel); border: 1px solid var(--hairline); border-radius: 5px;
+  padding: 7px 14px; font-size: 12px; letter-spacing: 1px; backdrop-filter: blur(8px);
+  animation: toastIn 0.25s ease-out, toastOut 0.4s ease-in 2.6s forwards;
+}
+.toast.sync { border-color: var(--accent); color: var(--accent); }
+.toast.recursion { border-color: var(--magenta); color: var(--magenta); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes toastOut { to { opacity: 0; } }
+
+/* Dev panel */
+.devbtn { position: fixed; top: 10px; right: 10px; z-index: 60; background: transparent; border: 1px solid var(--hairline); color: var(--dim); font-family: var(--mono); font-size: 12px; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+.devpanel {
+  position: fixed; top: 44px; right: 10px; z-index: 60; background: var(--bg);
+  border: 1px solid var(--hairline); border-radius: 6px; padding: 10px; width: 220px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.devpanel .drow { display: flex; gap: 6px; flex-wrap: wrap; }
+.devpanel button { flex: 1; background: transparent; border: 1px solid var(--hairline); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 5px 4px; border-radius: 4px; cursor: pointer; }
+.devpanel .danger { border-color: #8a2d3c; color: #e76a7f; }
+.devpanel .dlabel { color: var(--dim); font-size: 10px; letter-spacing: 1px; margin-top: 4px; }

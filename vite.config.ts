@@ -1,0 +1,10 @@
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  // Relative base so the build works on GitHub Pages project paths and in
+  // Capacitor's file:// webview without configuration.
+  base: './',
+  build: {
+    target: 'es2022',
+  },
+});
