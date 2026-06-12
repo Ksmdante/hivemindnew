@@ -19,6 +19,11 @@ export function fmtNum(n: number): string {
   return body + SUFFIXES[tier];
 }
 
+/** Integer-first formatting for Echo counts (always whole numbers). */
+export function fmtInt(n: number): string {
+  return n < 1000 ? String(Math.round(n)) : fmtNum(n);
+}
+
 export function fmtTime(sec: number): string {
   if (sec < 60) return `${Math.floor(sec)}s`;
   if (sec < 3600) return `${Math.floor(sec / 60)}m ${Math.floor(sec % 60)}s`;

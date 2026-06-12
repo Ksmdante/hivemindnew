@@ -4,10 +4,11 @@ import { GENERATORS, ECHO_DIVISOR, MIN_RECURSION_ECHOES } from '../data/generato
 import type { GameState } from './state';
 import { Emitter } from './events';
 import { genUnlocked } from './economy';
+import { webEchoGainMult, webStartSentience } from './web';
 
 /** Echoes gained if the player recursed right now. */
 export function echoGain(state: GameState): number {
-  return Math.floor(Math.sqrt(state.lifetimeRun / ECHO_DIVISOR));
+  return Math.floor(Math.sqrt(state.lifetimeRun / ECHO_DIVISOR) * webEchoGainMult(state));
 }
 
 export function canRecurse(state: GameState): boolean {
@@ -23,7 +24,7 @@ export function doRecursion(state: GameState, emit?: Emitter): number {
   state.echoes += gained;
   state.lifetimeEchoes += gained;
   state.recursions++;
-  state.sentience = 0;
+  state.sentience = webStartSentience(state); // Memory Trace residual
   state.lifetimeRun = 0;
   state.buffs = [];
   for (const g of GENERATORS) {

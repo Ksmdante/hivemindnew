@@ -1,9 +1,9 @@
 // Offline progression — the same integral the live engine runs (accrual rule),
 // capped, with overloads at expected value. design.md §2/§10.
 
-import { OFFLINE_CAP_SEC } from '../data/generators';
 import type { GameState } from './state';
 import { advance, totalRate } from './economy';
+import { webOfflineCapHours } from './web';
 
 export interface OfflineResult {
   elapsedSec: number;
@@ -15,10 +15,11 @@ export interface OfflineResult {
 export function applyOffline(
   state: GameState,
   elapsedSec: number,
-  capSec: number = OFFLINE_CAP_SEC,
+  capSec?: number,
 ): OfflineResult | null {
   if (elapsedSec < 5) return null;
-  const applied = Math.min(elapsedSec, capSec);
+  const cap = capSec ?? webOfflineCapHours(state) * 3600; // Deep Memory raises this
+  const applied = Math.min(elapsedSec, cap);
   const before = state.sentience;
   advance(state, applied); // integral path: no emitter
   return {

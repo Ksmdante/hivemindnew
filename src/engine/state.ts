@@ -29,6 +29,8 @@ export interface GameState {
   /** Sentience accrued toward the next pulse, per generator (the accrual rule) */
   accrual: Record<string, number>;
   buffs: ActiveBuff[];
+  /** Echo Web purchases: node id → level. Survives Recursion. */
+  web: Record<string, number>;
   impulseBase: number;
   /** wall-clock ms at last save — used by the shell to compute offline elapsed */
   lastSeenWallMs: number;
@@ -45,7 +47,7 @@ export function newState(seed = 1): GameState {
     accrual[g.id] = 0;
   }
   return {
-    schema: 1,
+    schema: 2,
     time: 0,
     sentience: 0,
     lifetimeRun: 0,
@@ -57,6 +59,7 @@ export function newState(seed = 1): GameState {
     cycleT,
     accrual,
     buffs: [],
+    web: {},
     impulseBase: IMPULSE_BASE,
     lastSeenWallMs: 0,
     rng: seed >>> 0 || 1,

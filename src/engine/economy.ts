@@ -16,6 +16,7 @@ import {
 import type { GameState, ActiveBuff } from './state';
 import { Emitter } from './events';
 import { nextRandom } from './rng';
+import { webGlobalMult, webCostDiv, webImpulseMult } from './web';
 
 /** Pulse events emitted per advance() call before a generator falls back to
  *  the (identical-total) integral path. Guards against tab-sleep floods. */
@@ -60,7 +61,14 @@ export function genRate(state: GameState, genId: string): number {
   const g = GEN_BY_ID[genId];
   const o = state.owned[genId] ?? 0;
   if (!g || o === 0) return 0;
-  return g.rate * o * syncMult(state, genId) * echoMult(state) * buffMult(state, 'generation');
+  return (
+    g.rate *
+    o *
+    syncMult(state, genId) *
+    echoMult(state) *
+    webGlobalMult(state) *
+    buffMult(state, 'generation')
+  );
 }
 
 /** Display/planning rate including overload EV. */
@@ -78,7 +86,7 @@ export function genCost(state: GameState, genId: string, ownedOverride?: number)
   const g = GEN_BY_ID[genId];
   const owned = ownedOverride ?? state.owned[genId] ?? 0;
   // Null cards divide in here (session 4) alongside cost buffs.
-  return g.baseCost * Math.pow(g.r, owned) * buffMult(state, 'cost');
+  return (g.baseCost * Math.pow(g.r, owned) * buffMult(state, 'cost')) / webCostDiv(state);
 }
 
 export function bulkCost(state: GameState, genId: string, qty: number): number {
@@ -140,7 +148,7 @@ export function buy(
 // ─── Impulse (manual tap — sealed economy, design.md §4) ─────────────────────
 
 export function impulseValue(state: GameState): number {
-  return state.impulseBase * buffMult(state, 'impulse');
+  return state.impulseBase * webImpulseMult(state) * buffMult(state, 'impulse');
 }
 
 export function impulse(state: GameState, emit?: Emitter): number {

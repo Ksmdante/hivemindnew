@@ -22,6 +22,10 @@ interface BotResult {
   echoes45Sec: number | null;
 }
 
+interface BotOpts {
+  heldEchoes?: number;
+}
+
 function pickBest(state: GameState, income: number) {
   let best: { genId: string; wait: number } | null = null;
   let bestScore = Infinity;
@@ -40,8 +44,13 @@ function pickBest(state: GameState, income: number) {
   return best;
 }
 
-function greedyBot(maxSec: number): BotResult {
+function greedyBot(maxSec: number, opts: BotOpts = {}): BotResult {
   const state = newState(42);
+  if (opts.heldEchoes) {
+    state.echoes = opts.heldEchoes;
+    state.lifetimeEchoes = opts.heldEchoes;
+    state.recursions = 1;
+  }
   const emit = new Emitter();
   let firstSyncSec: number | null = null;
   emit.on((e) => {
@@ -89,5 +98,14 @@ describe('pacing (greedy bot on the real engine)', () => {
     expect(result.echoes45Sec).not.toBeNull();
     expect(result.echoes45Sec!).toBeGreaterThanOrEqual(35 * 60);
     expect(result.echoes45Sec!).toBeLessThanOrEqual(50 * 60);
+  });
+
+  it('run 2 (holding 45 Echoes, +90% gen) is meaningfully faster', () => {
+    const run2 = greedyBot(60 * 60, { heldEchoes: 45 });
+    expect(run2.echoes45Sec).not.toBeNull();
+    // Compounding means x1.9 production compresses time by less than /1.9 —
+    // expect a real speedup, but not a degenerate one.
+    expect(run2.echoes45Sec!).toBeLessThan(result.echoes45Sec! * 0.85);
+    expect(run2.echoes45Sec!).toBeGreaterThan(result.echoes45Sec! * 0.3);
   });
 });

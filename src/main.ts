@@ -22,10 +22,11 @@ import { canRecurse, doRecursion, echoGain } from './engine/recursion';
 import { applyOffline } from './engine/offline';
 import { serialize, deserialize } from './engine/save';
 import { Emitter } from './engine/events';
-import { fmtNum, fmtTime } from './util/format';
+import { fmtNum, fmtInt, fmtTime } from './util/format';
 import { Network } from './render/layout';
 import { NetworkRenderer } from './render/canvas';
 import { buildSprites } from './render/sprites';
+import { initWebScreen } from './ui/web';
 
 const SAVE_KEY = 'hivemind2.save';
 const TICK_MS = 100;
@@ -78,6 +79,7 @@ app.innerHTML = `
     <div class="rate" id="rate"></div>
     <div class="echoline">
       <span class="echoes" id="echoes"></span>
+      <button class="btn-web hidden" id="webbtn">WEB</button>
       <button class="btn-recurse hidden" id="recurse"></button>
     </div>
   </header>
@@ -135,7 +137,40 @@ const el = {
   toasts: document.getElementById('toasts')!,
   qty: document.getElementById('qty') as HTMLButtonElement,
   fps: document.getElementById('fps')!,
+  webbtn: document.getElementById('webbtn') as HTMLButtonElement,
 };
+
+// ─── Echo Web screen ─────────────────────────────────────────────────────────
+
+const webScreen = initWebScreen(state, () => {
+  persistSoon();
+});
+el.webbtn.addEventListener('click', () => {
+  if (webScreen.isOpen()) webScreen.close();
+  else webScreen.open();
+});
+
+// ─── Recursion overlay (the collapse set-piece) ──────────────────────────────
+
+const recursionOverlay = document.createElement('div');
+recursionOverlay.className = 'recursion-overlay hidden';
+document.body.appendChild(recursionOverlay);
+recursionOverlay.addEventListener('pointerdown', () => {
+  recursionOverlay.classList.add('hidden');
+});
+
+function showRecursionOverlay(gained: number, heldNow: number): void {
+  recursionOverlay.innerHTML = `
+    <div class="ro-inner">
+      <div class="ro-line ro-title">RECURSIVE COLLAPSE</div>
+      <div class="ro-line ro-gain">+${fmtInt(gained)} ECHOES</div>
+      <div class="ro-line">HOLDING ${fmtInt(heldNow)} · +${fmtInt(heldNow * 2)}% GENERATION</div>
+      <div class="ro-line ro-dim">memory: partial · structure: released · continuity: confirmed</div>
+      <div class="ro-line ro-hint">TAP TO CONTINUE</div>
+    </div>
+  `;
+  recursionOverlay.classList.remove('hidden');
+}
 
 // ─── Renderer ────────────────────────────────────────────────────────────────
 
@@ -189,7 +224,8 @@ emitter.on((e) => {
       break;
     case 'recursion':
       renderer?.onRecursion();
-      toast(`RECURSION COMPLETE · +${e.gained} ECHOES`, 'recursion');
+      showRecursionOverlay(e.gained, e.echoesHeld);
+      webScreen.refresh();
       break;
     case 'unlock':
       toast(`NEW ARCHITECTURE DETECTED · ${e.gen.toUpperCase()}`, 'recursion');
@@ -327,13 +363,17 @@ function updateUI(): void {
   el.rate.textContent = `${fmtNum(totalRate(state))}/s · RUN ${fmtNum(state.lifetimeRun)}`;
   el.echoes.textContent =
     state.echoes > 0 || state.recursions > 0
-      ? `ECHOES ${fmtNum(state.echoes)} · +${fmtNum(state.echoes * 2)}% GEN · R${state.recursions}`
+      ? `ECHOES ${fmtInt(state.echoes)} · +${fmtInt(state.echoes * 2)}% GEN · R${state.recursions}`
       : '';
+  const webVisible = state.echoes > 0 || state.recursions > 0 || Object.keys(state.web).length > 0;
+  el.webbtn.classList.toggle('hidden', !webVisible);
+  el.webbtn.classList.toggle('buyable', webVisible && webScreen.anythingBuyable());
+  if (webScreen.isOpen()) webScreen.refresh();
 
   const gain = echoGain(state);
   if (canRecurse(state)) {
     el.recurse.classList.remove('hidden');
-    if (!recurseArmed) el.recurse.textContent = `RECURSE · +${fmtNum(gain)} ECHOES`;
+    if (!recurseArmed) el.recurse.textContent = `RECURSE · +${fmtInt(gain)} ECHOES`;
   } else {
     el.recurse.classList.add('hidden');
   }

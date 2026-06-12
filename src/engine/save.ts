@@ -5,7 +5,7 @@ import { GENERATORS } from '../data/generators';
 import type { GameState } from './state';
 import { newState } from './state';
 
-export const SAVE_SCHEMA = 1;
+export const SAVE_SCHEMA = 2; // v2: + web (Echo Web levels)
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);
@@ -44,6 +44,14 @@ export function deserialize(raw: string): GameState | null {
     s.owned[g.id] = num(owned?.[g.id], 0);
     s.cycleT[g.id] = num(cycleT?.[g.id], 0);
     s.accrual[g.id] = num(accrual?.[g.id], 0);
+  }
+
+  const web = data.web as Record<string, unknown> | undefined;
+  if (web && typeof web === 'object') {
+    for (const k of Object.keys(web)) {
+      const v = num(web[k], 0);
+      if (v > 0) s.web[k] = Math.floor(v);
+    }
   }
 
   if (Array.isArray(data.buffs)) {

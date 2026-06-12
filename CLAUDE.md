@@ -81,7 +81,14 @@ If a deliberate rebalance moves a target, change the test AND the table in
   nearest sibling); comets/edges follow the node's actual link. Visual cap
   44/class (bootstrap smalls 20, comet cap 140). Dev console: FORCE RECURSE,
   +1 RANK, UNLOCK ALL GENS, RESET SAVE alongside grants/time-warps.
-- S3: Recursion UX + Echo Web screen (engine support already present).
+- **S3 (done):** Echo Web — data in `data/web.ts` (Awakening + Architecture +
+  Cognition live; Signals/Anomalies roots dormant until S5/S4), engine in
+  `engine/web.ts` plugged into the seams (global mult, cost div, impulse,
+  echo gain, start sentience, offline cap). Spending Echoes sacrifices the
+  held +2%/Echo passive. Web screen (`ui/web.ts`, SVG graph + trade panel),
+  WEB button in HUD (pulses when something is buyable), recursion collapse
+  overlay. Save schema 2 (+web). Tests: web.test.ts + run-2-faster pacing
+  gate (28 total).
 - S4: cards (Archive) — plug into `overloadChance`/`genRate`/`genCost` seams.
 - S5: signals — ride the existing `ActiveBuff` system; add cooldown store.
 - S6: directives + logs + Network Sync. S7: audio/haptics. S8: monetisation
