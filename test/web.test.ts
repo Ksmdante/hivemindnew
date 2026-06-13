@@ -18,13 +18,24 @@ import { serialize, deserialize } from '../src/engine/save';
 describe('echo web purchases', () => {
   it('root must be bought before branches; spending sacrifices held echoes', () => {
     const s = newState();
-    s.echoes = 10;
+    s.echoes = 25;
     expect(webNodeAvailable(s, 'cog_root')).toBe(false);
     expect(buyWebNode(s, 'cog_root')).toBe(false);
     expect(buyWebNode(s, 'awakening')).toBe(true);
-    expect(s.echoes).toBe(9); // sacrifice
+    expect(s.echoes).toBe(20); // sacrifice
     expect(buyWebNode(s, 'cog_root')).toBe(true);
-    expect(s.echoes).toBe(6);
+    expect(s.echoes).toBe(5);
+  });
+
+  it('a 45-echo first recursion affords roughly one commitment', () => {
+    // design.md §4: Awakening + one branch root, holding the remainder —
+    // the next real node (Amplified Output L1 at 40) is out of reach.
+    const s = newState();
+    s.echoes = 45;
+    expect(buyWebNode(s, 'awakening')).toBe(true);
+    expect(buyWebNode(s, 'cog_root')).toBe(true);
+    expect(s.echoes).toBe(25);
+    expect(buyWebNode(s, 'cog_amp')).toBe(false); // costs 40
   });
 
   it('refuses purchases the player cannot afford', () => {
@@ -59,15 +70,15 @@ describe('web effects reach the economy seams', () => {
     s.owned.neuron = 1;
     s.echoes = 10;
     const before = genRate(s, 'neuron'); // includes +20% held passive
-    buyWebNode(s, 'awakening'); // spends 1 → passive drops to +18%
-    const expected = (1.25 * (1 + 0.02 * 9)) / (1 + 0.02 * 10);
+    buyWebNode(s, 'awakening'); // spends 5 → passive drops to +10%
+    const expected = (1.25 * (1 + 0.02 * 5)) / (1 + 0.02 * 10);
     expect(genRate(s, 'neuron') / before).toBeCloseTo(expected, 10);
   });
 
   it('cost div reduces generator prices', () => {
     const s = newState();
     const before = genCost(s, 'neuron');
-    s.echoes = 10;
+    s.echoes = 25;
     buyWebNode(s, 'awakening');
     buyWebNode(s, 'arch_root');
     expect(before / genCost(s, 'neuron')).toBeCloseTo(1.25, 10);
@@ -87,7 +98,7 @@ describe('web effects reach the economy seams', () => {
 
   it('echo resonance raises gain; memory trace seeds the next run', () => {
     const s = newState();
-    s.echoes = 1000;
+    s.echoes = 5000;
     buyWebNode(s, 'awakening');
     buyWebNode(s, 'cog_root');
     for (let i = 0; i < 5; i++) buyWebNode(s, 'cog_amp');

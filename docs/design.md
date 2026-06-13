@@ -78,6 +78,12 @@ with smalls attached.
 - **Each held Echo: +2% global generation.** Echoes are ALSO the Echo Web
   currency — spending sacrifices the passive bonus. That tension is the
   prestige decision.
+- **Web cost curve (re-tuned 2026-06-13 sense check):** costs sized so a
+  ×2 node beats holding only above a breakeven (`M(1+0.02(H−C)) > 1+0.02H`):
+  Awakening 5 + one root 15 ≈ the whole first recursion (one commitment);
+  Amplified Output L1 (40) breaks even at 30 held, L2 (100) at 150 held.
+  Gateways (Awakening/roots) are always-worth-it on purpose. Full Web ≈
+  5,900 cumulative Echoes.
 - **Generator unlocks gate on lifetime Echoes** (account level): Æther 200,
   Xeno 2,000, Choir 20,000, Singularity 200,000.
 
