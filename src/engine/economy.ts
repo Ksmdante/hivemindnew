@@ -25,6 +25,25 @@ import {
   webOverloadBase,
   webSyncBaseAdd,
 } from './web';
+import {
+  cardSurgeMult,
+  cardTempoDiv,
+  cardOverloadChance,
+  cardNullDiv,
+  cardGlobalGenMult,
+  cardGlobalCycleDiv,
+  cardClassSetMult,
+  cardGlobalSetMult,
+  cardImpulseMult,
+  cardImpulseBaseAdd,
+  cardImpulseCrit,
+  grantRandomCard,
+} from './cards';
+import {
+  ANOMALY_MIN_SEC,
+  ANOMALY_MAX_SEC,
+  ANOMALY_LIFETIME_SEC,
+} from '../data/cards';
 
 /** Pulse events emitted per advance() call before a generator falls back to
  *  the (identical-total) integral path. Guards against tab-sleep floods. */
@@ -52,7 +71,10 @@ export function syncMult(state: GameState, genId: string): number {
  *  same per-pulse payout, more pulses, higher throughput. Tempo cards plug in
  *  here too (session 4). */
 export function cycleOf(state: GameState, genId: string): number {
-  return GEN_BY_ID[genId].cycle / webCycleDiv(state);
+  return (
+    GEN_BY_ID[genId].cycle /
+    (webCycleDiv(state) * cardTempoDiv(state, genId) * cardGlobalCycleDiv(state))
+  );
 }
 
 export function buffMult(state: GameState, kind: ActiveBuff['kind']): number {
@@ -68,8 +90,8 @@ export function echoMult(state: GameState): number {
 
 /** Overload (crit) chance per pulse — web base + Overload cards (session 4).
  *  Hard-capped so the EV multiplier stays bounded. */
-export function overloadChance(state: GameState, _genId: string): number {
-  return Math.min(0.5, webOverloadBase(state));
+export function overloadChance(state: GameState, genId: string): number {
+  return Math.min(0.5, webOverloadBase(state) + cardOverloadChance(state, genId));
 }
 
 /** Per-second rate for one generator class, all multipliers applied,
@@ -85,7 +107,15 @@ export function genRate(state: GameState, genId: string): number {
     echoMult(state) *
     webGlobalMult(state) *
     webGenMult(state, genId) *
-    webCycleDiv(state) * // speed = more pulses at the same per-pulse payout
+    // speed = more pulses at the same per-pulse payout
+    webCycleDiv(state) *
+    cardTempoDiv(state, genId) *
+    cardGlobalCycleDiv(state) *
+    // cards (session 4)
+    cardSurgeMult(state, genId) *
+    cardClassSetMult(state, genId) *
+    cardGlobalGenMult(state) *
+    cardGlobalSetMult(state) *
     buffMult(state, 'generation')
   );
 }
@@ -104,8 +134,10 @@ export function totalRate(state: GameState): number {
 export function genCost(state: GameState, genId: string, ownedOverride?: number): number {
   const g = GEN_BY_ID[genId];
   const owned = ownedOverride ?? state.owned[genId] ?? 0;
-  // Null cards divide in here (session 4) alongside cost buffs.
-  return (g.baseCost * Math.pow(g.r, owned) * buffMult(state, 'cost')) / webCostDiv(state);
+  return (
+    (g.baseCost * Math.pow(g.r, owned) * buffMult(state, 'cost')) /
+    (webCostDiv(state) * cardNullDiv(state, genId))
+  );
 }
 
 export function bulkCost(state: GameState, genId: string, qty: number): number {
@@ -167,13 +199,21 @@ export function buy(
 // ─── Impulse (manual tap — sealed economy, design.md §4) ─────────────────────
 
 export function impulseValue(state: GameState): number {
-  return state.impulseBase * webImpulseMult(state) * buffMult(state, 'impulse');
+  return (
+    (state.impulseBase + cardImpulseBaseAdd(state)) *
+    webImpulseMult(state) *
+    cardImpulseMult(state) *
+    buffMult(state, 'impulse')
+  );
 }
 
 export function impulse(state: GameState, emit?: Emitter): number {
-  const v = impulseValue(state);
+  let v = impulseValue(state);
+  const critChance = cardImpulseCrit(state);
+  const crit = critChance > 0 && nextRandom(state) < critChance;
+  if (crit) v *= 10;
   addEarnings(state, v);
-  if (emit) emit.emit({ type: 'impulse', amount: v });
+  if (emit) emit.emit({ type: 'impulse', amount: v, crit });
   return v;
 }
 
@@ -203,6 +243,37 @@ export function advance(state: GameState, dt: number, emit?: Emitter): void {
     remaining -= seg;
     state.buffs = state.buffs.filter((b) => b.endsAt > state.time + 1e-9);
   }
+  tickAnomaly(state, emit);
+}
+
+/** Canvas anomaly cadence — only ticks during ACTIVE play (emit present);
+ *  offline/integral time never spawns or burns the schedule. */
+function tickAnomaly(state: GameState, emit?: Emitter): void {
+  if (!emit) return;
+  if (state.anomalyActive && state.time >= state.anomalyUntil) {
+    state.anomalyActive = false;
+    emit.emit({ type: 'anomaly_gone', collected: false });
+  }
+  if (state.anomalyNextAt === 0) {
+    state.anomalyNextAt =
+      state.time + ANOMALY_MIN_SEC + nextRandom(state) * (ANOMALY_MAX_SEC - ANOMALY_MIN_SEC);
+    return;
+  }
+  if (!state.anomalyActive && state.time >= state.anomalyNextAt) {
+    state.anomalyActive = true;
+    state.anomalyUntil = state.time + ANOMALY_LIFETIME_SEC;
+    state.anomalyNextAt =
+      state.time + ANOMALY_MIN_SEC + nextRandom(state) * (ANOMALY_MAX_SEC - ANOMALY_MIN_SEC);
+    emit.emit({ type: 'anomaly_spawn' });
+  }
+}
+
+/** Tap on the canvas anomaly: collect → one weighted card drop. */
+export function collectAnomaly(state: GameState, emit?: Emitter) {
+  if (!state.anomalyActive) return null;
+  state.anomalyActive = false;
+  if (emit) emit.emit({ type: 'anomaly_gone', collected: true });
+  return grantRandomCard(state, emit);
 }
 
 function advanceSegment(state: GameState, dt: number, emit?: Emitter): void {

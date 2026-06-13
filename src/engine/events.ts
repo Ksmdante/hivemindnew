@@ -5,9 +5,13 @@ export type EngineEvent =
   | { type: 'pulse'; gen: string; amount: number; overload: boolean }
   | { type: 'sync'; gen: string; milestone: number; multNow: number }
   | { type: 'purchase'; gen: string; owned: number; qty: number }
-  | { type: 'impulse'; amount: number }
+  | { type: 'impulse'; amount: number; crit: boolean }
   | { type: 'recursion'; gained: number; echoesHeld: number }
-  | { type: 'unlock'; gen: string };
+  | { type: 'unlock'; gen: string }
+  | { type: 'anomaly_spawn' }
+  | { type: 'anomaly_gone'; collected: boolean }
+  | { type: 'card_drop'; cardId: string; copies: number; newCard: boolean; leveledUp: boolean; level: number }
+  | { type: 'cache_open'; kind: string; drops: number };
 
 export type Listener = (e: EngineEvent) => void;
 

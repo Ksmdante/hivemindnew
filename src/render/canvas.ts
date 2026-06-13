@@ -70,12 +70,14 @@ export class NetworkRenderer {
   private comets: Comet[] = [];
   private ripples: Ripple[] = [];
   private floats: FloatText[] = [];
+  private anomalyPos: { x: number; y: number } | null = null;
   private dust: DustLayer[] = [];
   private flashAlpha = 0;
   private seedFlash = 0;
   private vignette: CanvasGradient | null = null;
   private accentGlow: HTMLCanvasElement;
   private goldGlow: HTMLCanvasElement;
+  private magentaGlow: HTMLCanvasElement;
   private lastFrame = 0;
 
   constructor(
@@ -87,6 +89,7 @@ export class NetworkRenderer {
     this.ctx = canvas.getContext('2d')!;
     this.accentGlow = makeGlow(ACCENT);
     this.goldGlow = makeGlow(GOLD);
+    this.magentaGlow = makeGlow('#f57cd4');
     for (const parallax of [0.25, 0.5, 0.75]) {
       const pts = [];
       for (let i = 0; i < 36; i++) {
@@ -230,6 +233,71 @@ export class NetworkRenderer {
     this.seedFlash = Math.max(this.seedFlash, 0.5);
   }
 
+  /** A corrupted pattern appears somewhere on the network. */
+  onAnomalySpawn(): void {
+    const nodes = this.net.nodes.filter((n) => !n.fusing);
+    if (nodes.length > 0) {
+      const n = nodes[Math.floor(Math.random() * nodes.length)];
+      const a = Math.random() * Math.PI * 2;
+      this.anomalyPos = { x: n.x + Math.cos(a) * 38, y: n.y + Math.sin(a) * 38 };
+    } else {
+      const a = Math.random() * Math.PI * 2;
+      this.anomalyPos = { x: Math.cos(a) * 120, y: Math.sin(a) * 120 };
+    }
+    this.ripples.push({
+      x: this.anomalyPos.x, y: this.anomalyPos.y,
+      age: 0, dur: 1.2, maxR: 70, color: '#f57cd4', width: 1.5,
+    });
+  }
+
+  onAnomalyGone(collected: boolean): void {
+    if (collected && this.anomalyPos) {
+      this.ripples.push({
+        x: this.anomalyPos.x, y: this.anomalyPos.y,
+        age: 0, dur: 0.8, maxR: 55, color: '#f57cd4', width: 2.2,
+      });
+      this.floats.push({
+        x: this.anomalyPos.x, y: this.anomalyPos.y - 12,
+        age: 0, text: 'PATTERN ACQUIRED', color: '#f57cd4',
+      });
+    }
+    this.anomalyPos = null;
+  }
+
+  /** Hit test in stage-local pixels (used by the shell before Impulse). */
+  anomalyHitTest(sx: number, sy: number): boolean {
+    if (!this.anomalyPos) return false;
+    const [wx, wy] = this.screenToWorld(sx, sy);
+    const r = 30 / Math.min(1, this.camScale); // generous touch target
+    return (wx - this.anomalyPos.x) ** 2 + (wy - this.anomalyPos.y) ** 2 < r * r;
+  }
+
+  private drawAnomaly(ctx: CanvasRenderingContext2D, nowMs: number): void {
+    if (!this.anomalyPos) return;
+    const { x, y } = this.anomalyPos;
+    const flicker = Math.random() < 0.12 ? 0.25 : 1; // glitchy dropout
+    const jx = (Math.random() - 0.5) * 1.6;
+    const jy = (Math.random() - 0.5) * 1.6;
+    ctx.save();
+    ctx.translate(x + jx, y + jy);
+    ctx.rotate(nowMs / 900);
+    ctx.globalAlpha = 0.85 * flicker;
+    ctx.strokeStyle = '#f57cd4';
+    ctx.lineWidth = 1.3 / this.camScale;
+    const s = 11 + Math.sin(nowMs / 250) * 2;
+    ctx.strokeRect(-s / 2, -s / 2, s, s);
+    ctx.rotate(Math.PI / 4);
+    ctx.globalAlpha = 0.5 * flicker;
+    ctx.strokeRect(-s / 2, -s / 2, s, s);
+    ctx.restore();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.6 * flicker;
+    const gs = 34;
+    ctx.drawImage(this.magentaGlow, x - gs / 2, y - gs / 2, gs, gs);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+  }
+
   onRecursion(): void {
     this.flashAlpha = 1;
     this.comets = [];
@@ -287,6 +355,7 @@ export class NetworkRenderer {
     this.drawNodes(ctx, nowMs);
     this.drawAccrualRings(ctx);
     this.drawSeed(ctx, nowMs, dt);
+    this.drawAnomaly(ctx, nowMs);
     this.drawComets(ctx, dt);
     this.drawRipples(ctx, dt);
     this.drawFloats(ctx, dt);

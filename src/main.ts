@@ -27,6 +27,9 @@ import { Network } from './render/layout';
 import { NetworkRenderer } from './render/canvas';
 import { buildSprites } from './render/sprites';
 import { initWebScreen } from './ui/web';
+import { initArchive } from './ui/archive';
+import { collectAnomaly } from './engine/economy';
+import { CARD_BY_ID } from './data/cards';
 
 const SAVE_KEY = 'hivemind2.save';
 const TICK_MS = 100;
@@ -79,6 +82,7 @@ app.innerHTML = `
     <div class="rate" id="rate"></div>
     <div class="echoline">
       <span class="echoes" id="echoes"></span>
+      <button class="btn-web hidden" id="arcbtn">ARCHIVE</button>
       <button class="btn-web hidden" id="webbtn">WEB</button>
       <button class="btn-recurse hidden" id="recurse"></button>
     </div>
@@ -119,6 +123,13 @@ app.innerHTML = `
     </div>
     <div class="drow">
       <button id="dev-unlock">UNLOCK ALL GENS</button>
+      <button id="dev-anomaly">SPAWN ANOMALY</button>
+    </div>
+    <div class="dlabel">CACHES</div>
+    <div class="drow">
+      <button data-cachegrant="trace">+TRACE</button>
+      <button data-cachegrant="deep">+DEEP</button>
+      <button data-cachegrant="recursive">+RECUR</button>
     </div>
     <div class="drow"><button class="danger" id="wipe">RESET SAVE</button></div>
     <div class="dlabel">RENDER</div>
@@ -146,8 +157,19 @@ const webScreen = initWebScreen(state, () => {
   persistSoon();
 });
 el.webbtn.addEventListener('click', () => {
+  archive.close();
   if (webScreen.isOpen()) webScreen.close();
   else webScreen.open();
+});
+
+const archive = initArchive(state, emitter, () => {
+  persistSoon();
+});
+const arcbtn = document.getElementById('arcbtn') as HTMLButtonElement;
+arcbtn.addEventListener('click', () => {
+  webScreen.close();
+  if (archive.isOpen()) archive.close();
+  else archive.open();
 });
 
 // ─── Recursion overlay (the collapse set-piece) ──────────────────────────────
@@ -230,15 +252,35 @@ emitter.on((e) => {
     case 'unlock':
       toast(`NEW ARCHITECTURE DETECTED · ${e.gen.toUpperCase()}`, 'recursion');
       break;
+    case 'anomaly_spawn':
+      renderer?.onAnomalySpawn();
+      break;
+    case 'anomaly_gone':
+      renderer?.onAnomalyGone(e.collected);
+      break;
+    case 'card_drop': {
+      const def = CARD_BY_ID[e.cardId];
+      if (e.newCard) toast(`PATTERN ACQUIRED · ${def.name.toUpperCase()}`, 'recursion');
+      else if (e.leveledUp) toast(`${def.name.toUpperCase()} · LEVEL ${e.level}`, 'recursion');
+      if (archive.isOpen()) archive.refresh();
+      break;
+    }
   }
 });
 
 // ─── Impulse (tap) ───────────────────────────────────────────────────────────
 
 el.stage.addEventListener('pointerdown', (ev) => {
-  const v = impulse(state, emitter);
   const rect = el.stage.getBoundingClientRect();
-  renderer?.onImpulse(ev.clientX - rect.left, ev.clientY - rect.top, v);
+  const sx = ev.clientX - rect.left;
+  const sy = ev.clientY - rect.top;
+  if (renderer?.anomalyHitTest(sx, sy)) {
+    collectAnomaly(state, emitter);
+    persistSoon();
+    return;
+  }
+  const v = impulse(state, emitter);
+  renderer?.onImpulse(sx, sy, v);
 });
 
 // ─── Generator drawer ────────────────────────────────────────────────────────
@@ -348,6 +390,16 @@ document.getElementById('devpanel')!.addEventListener('click', (ev) => {
     state.lifetimeEchoes = Math.max(state.lifetimeEchoes, 200_000);
     toast('ALL ARCHITECTURES UNLOCKED');
   }
+  if (b.id === 'dev-anomaly') {
+    state.anomalyActive = true;
+    state.anomalyUntil = state.time + 45;
+    emitter.emit({ type: 'anomaly_spawn' });
+  }
+  const cacheGrant = b.getAttribute('data-cachegrant');
+  if (cacheGrant) {
+    state.caches[cacheGrant as 'trace' | 'deep' | 'recursive']++;
+    toast(`+1 ${cacheGrant.toUpperCase()} CACHE`);
+  }
   if (b.id === 'wipe') {
     saveWiped = true;
     localStorage.removeItem(SAVE_KEY);
@@ -369,6 +421,12 @@ function updateUI(): void {
   el.webbtn.classList.toggle('hidden', !webVisible);
   el.webbtn.classList.toggle('buyable', webVisible && webScreen.anythingBuyable());
   if (webScreen.isOpen()) webScreen.refresh();
+  const arcVisible = archive.hasAnythingToShow();
+  arcbtn.classList.toggle('hidden', !arcVisible);
+  arcbtn.classList.toggle(
+    'buyable',
+    arcVisible && state.caches.trace + state.caches.deep + state.caches.recursive > 0,
+  );
 
   const gain = echoGain(state);
   if (canRecurse(state)) {

@@ -5,7 +5,7 @@ import { GENERATORS } from '../data/generators';
 import type { GameState } from './state';
 import { newState } from './state';
 
-export const SAVE_SCHEMA = 2; // v2: + web (Echo Web levels)
+export const SAVE_SCHEMA = 3; // v2: +web · v3: +cards/caches/anomaly
 
 export function serialize(state: GameState): string {
   return JSON.stringify(state);
@@ -53,6 +53,23 @@ export function deserialize(raw: string): GameState | null {
       if (v > 0) s.web[k] = Math.floor(v);
     }
   }
+
+  const cards = data.cards as Record<string, unknown> | undefined;
+  if (cards && typeof cards === 'object') {
+    for (const k of Object.keys(cards)) {
+      const v = num(cards[k], 0);
+      if (v > 0) s.cards[k] = Math.floor(v);
+    }
+  }
+  const caches = data.caches as Record<string, unknown> | undefined;
+  if (caches && typeof caches === 'object') {
+    s.caches.trace = Math.max(0, Math.floor(num(caches.trace, 0)));
+    s.caches.deep = Math.max(0, Math.floor(num(caches.deep, 0)));
+    s.caches.recursive = Math.max(0, Math.floor(num(caches.recursive, 0)));
+  }
+  s.anomalyNextAt = num(data.anomalyNextAt, 0);
+  s.anomalyActive = data.anomalyActive === true;
+  s.anomalyUntil = num(data.anomalyUntil, 0);
 
   if (Array.isArray(data.buffs)) {
     for (const b of data.buffs as Array<Record<string, unknown>>) {

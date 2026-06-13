@@ -31,6 +31,14 @@ export interface GameState {
   buffs: ActiveBuff[];
   /** Echo Web purchases: node id → level. Survives Recursion. */
   web: Record<string, number>;
+  /** Card copies: card id → duplicates collected. Survives Recursion. */
+  cards: Record<string, number>;
+  /** Unopened Memory Caches. */
+  caches: { trace: number; deep: number; recursive: number };
+  /** Canvas anomaly scheduling (engine time, seconds). */
+  anomalyNextAt: number;
+  anomalyActive: boolean;
+  anomalyUntil: number;
   impulseBase: number;
   /** wall-clock ms at last save — used by the shell to compute offline elapsed */
   lastSeenWallMs: number;
@@ -47,7 +55,7 @@ export function newState(seed = 1): GameState {
     accrual[g.id] = 0;
   }
   return {
-    schema: 2,
+    schema: 3,
     time: 0,
     sentience: 0,
     lifetimeRun: 0,
@@ -60,6 +68,11 @@ export function newState(seed = 1): GameState {
     accrual,
     buffs: [],
     web: {},
+    cards: {},
+    caches: { trace: 0, deep: 0, recursive: 0 },
+    anomalyNextAt: 0,
+    anomalyActive: false,
+    anomalyUntil: 0,
     impulseBase: IMPULSE_BASE,
     lastSeenWallMs: 0,
     rng: seed >>> 0 || 1,

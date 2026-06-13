@@ -179,6 +179,41 @@ body {
 .wp-buy:disabled { border-color: var(--hairline); color: var(--dim); cursor: default; }
 .wp-buy:active:not(:disabled) { transform: scale(0.98); }
 
+/* The Archive */
+.archive {
+  position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+  background: rgba(4, 5, 13, 0.96); backdrop-filter: blur(6px);
+}
+.arc-caches {
+  display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--hairline);
+  flex-wrap: wrap; align-items: center;
+}
+.arc-cache {
+  background: transparent; border: 1px solid var(--magenta); color: var(--magenta);
+  font-family: var(--mono); font-size: 11px; padding: 7px 12px; border-radius: 5px; cursor: pointer;
+}
+.arc-cache:disabled { border-color: var(--hairline); color: var(--dim); cursor: default; }
+.arc-target-hint { color: var(--gold); font-size: 10px; letter-spacing: 1px; }
+.arc-results {
+  padding: 8px 16px; border-bottom: 1px solid var(--hairline); display: flex;
+  flex-direction: column; gap: 3px; font-size: 11px; background: rgba(13, 16, 32, 0.6);
+}
+.arc-new { color: var(--gold); font-size: 9px; letter-spacing: 1px; }
+.arc-up { color: #7dffb2; font-size: 9px; letter-spacing: 1px; }
+.arc-body { flex: 1; overflow-y: auto; padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+.arc-section { margin-bottom: 14px; border-radius: 6px; }
+.arc-section.targetable { outline: 1px dashed var(--gold); outline-offset: 4px; cursor: pointer; }
+.arc-sec-head { font-size: 11px; letter-spacing: 2px; margin-bottom: 6px; }
+.arc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.arc-cell {
+  border: 1px solid var(--hairline); border-radius: 6px; padding: 8px 6px;
+  display: flex; flex-direction: column; gap: 3px; min-height: 64px;
+}
+.arc-cell.unseen { opacity: 0.32; align-items: center; justify-content: center; }
+.arc-cname { font-size: 11px; }
+.arc-ctype { color: var(--dim); font-size: 8px; letter-spacing: 1px; }
+.arc-cnext { color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; margin-top: auto; }
+
 /* Recursion overlay */
 .recursion-overlay {
   position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;

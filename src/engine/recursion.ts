@@ -27,6 +27,11 @@ export function doRecursion(state: GameState, emit?: Emitter): number {
   state.sentience = webStartSentience(state); // Memory Trace residual
   state.lifetimeRun = 0;
   state.buffs = [];
+  // INTERIM until directives (session 6): each Recursion banks a Trace Cache.
+  state.caches.trace++;
+  // Canvas anomaly run-state resets; collected cards persist.
+  state.anomalyActive = false;
+  state.anomalyNextAt = 0;
   for (const g of GENERATORS) {
     state.owned[g.id] = 0;
     state.cycleT[g.id] = 0;

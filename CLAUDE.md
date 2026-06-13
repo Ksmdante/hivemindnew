@@ -89,7 +89,17 @@ If a deliberate rebalance moves a target, change the test AND the table in
   WEB button in HUD (pulses when something is buyable), recursion collapse
   overlay. Save schema 2 (+web). Tests: web.test.ts + run-2-faster pacing
   gate (28 total).
-- S4: cards (Archive) — plug into `overloadChance`/`genRate`/`genCost` seams.
+- **Web 2.0 (done):** 55-node fogged sprawl — fog BFS in `engine/web.ts`
+  (owned/frontier/sensed/dark; rank-locked + dormant frontier STAY FOGGED),
+  rank rings R0/3/7/12/20, pan/zoom map, new seams (cycle_div, gen_mult,
+  overload_base, sync_base_add). Signals/Anomalies territories drawn dormant.
+- **S4 (done):** cards — `data/cards.ts` (52: Surge/Tempo/Overload/Null ×
+  11 classes + Impulse + Global sets), duplicates level at 1/3/7/15/31/63
+  copies, caps on lifetime Echoes (L3@2K…L6@400K), set bonuses, weighted
+  drops (owned classes ×8), Memory Caches (Trace 3/Deep 5 class-targeted/
+  Recursive 8), canvas anomaly spawns on active-time cadence (240–480s,
+  45s lifetime, never offline), Archive UI, save schema 3.
+  INTERIM until S6 directives: each Recursion banks +1 Trace Cache.
 - S5: signals — ride the existing `ActiveBuff` system; add cooldown store.
 - S6: directives + logs + Network Sync. S7: audio/haptics. S8: monetisation
   stubs. S9: packaging.
