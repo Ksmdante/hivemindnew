@@ -11,7 +11,8 @@ import {
   webStartSentience,
   webLevel,
 } from '../src/engine/web';
-import { genRate, genCost, impulseValue } from '../src/engine/economy';
+import { webVisibility, webNodeRankLocked, webOverloadBase } from '../src/engine/web';
+import { genRate, genCost, impulseValue, cycleOf, syncMult, overloadChance } from '../src/engine/economy';
 import { echoGain, doRecursion } from '../src/engine/recursion';
 import { serialize, deserialize } from '../src/engine/save';
 
@@ -126,6 +127,100 @@ describe('web effects reach the economy seams', () => {
     expect(webImpulseMult(s)).toBe(1);
     expect(webEchoGainMult(s)).toBe(1);
     expect(webStartSentience(s)).toBe(0);
+  });
+});
+
+describe('fog of war', () => {
+  it('fresh state: awakening is the frontier, its neighbours sensed, beyond dark', () => {
+    const s = newState();
+    const vis = webVisibility(s);
+    expect(vis['awakening']).toBe('frontier');
+    expect(vis['arch_root']).toBe('sensed');
+    expect(vis['cog_root']).toBe('sensed');
+    expect(vis['sig_root']).toBe('sensed');
+    expect(vis['arch_compress']).toBe('dark');
+    expect(vis['core_answer']).toBe('dark');
+  });
+
+  it('buying expands the map one ring at a time', () => {
+    const s = newState();
+    s.echoes = 100;
+    buyWebNode(s, 'awakening');
+    let vis = webVisibility(s);
+    expect(vis['awakening']).toBe('owned');
+    expect(vis['arch_root']).toBe('frontier');
+    expect(vis['arch_compress']).toBe('sensed');
+    expect(vis['arch_compress2']).toBe('dark');
+    buyWebNode(s, 'arch_root');
+    vis = webVisibility(s);
+    expect(vis['arch_compress']).toBe('frontier');
+    expect(vis['arch_compress2']).toBe('sensed');
+    expect(vis['arch_compress3']).toBe('dark');
+  });
+});
+
+describe('rank gates (stay fogged)', () => {
+  it('rank-locked nodes cannot be bought even when affordable and adjacent', () => {
+    const s = newState();
+    s.echoes = 100000;
+    buyWebNode(s, 'awakening');
+    buyWebNode(s, 'arch_root');
+    buyWebNode(s, 'arch_compress');
+    expect(webNodeRankLocked(s, 'arch_compress2')).toBe(true);
+    expect(buyWebNode(s, 'arch_compress2')).toBe(false); // R3 gate
+    s.recursions = 3;
+    expect(webNodeRankLocked(s, 'arch_compress2')).toBe(false);
+    expect(buyWebNode(s, 'arch_compress2')).toBe(true);
+  });
+});
+
+describe('new effect seams', () => {
+  function deepState() {
+    const s = newState();
+    s.echoes = 10_000_000;
+    s.recursions = 50;
+    buyWebNode(s, 'awakening');
+    return s;
+  }
+
+  // Spending echoes shifts the held passive, so normalize it out of ratios.
+  const normRate = (s: ReturnType<typeof newState>, gen: string) =>
+    genRate(s, gen) / (1 + 0.02 * s.echoes);
+
+  it('cycle_div speeds pulses AND raises rate by the same factor', () => {
+    const s = deepState();
+    s.owned.neuron = 1;
+    buyWebNode(s, 'cog_root');
+    for (let i = 0; i < 5; i++) buyWebNode(s, 'cog_amp');
+    const rateBefore = normRate(s, 'neuron');
+    const cycleBefore = cycleOf(s, 'neuron');
+    buyWebNode(s, 'cog_clock'); // ÷1.1
+    expect(cycleOf(s, 'neuron')).toBeCloseTo(cycleBefore / 1.1, 10);
+    expect(normRate(s, 'neuron') / rateBefore).toBeCloseTo(1.1, 10);
+  });
+
+  it('gen_mult hits only its target class', () => {
+    const s = deepState();
+    s.owned.lattice = 1;
+    s.owned.neuron = 1;
+    buyWebNode(s, 'arch_root');
+    buyWebNode(s, 'arch_memory');
+    const latticeBefore = normRate(s, 'lattice');
+    const neuronBefore = normRate(s, 'neuron');
+    buyWebNode(s, 'arch_doctrine_a'); // Lattice ×4
+    expect(normRate(s, 'lattice') / latticeBefore).toBeCloseTo(4, 10);
+    expect(normRate(s, 'neuron') / neuronBefore).toBeCloseTo(1, 10);
+  });
+
+  it('overload base and sync base reach the economy', () => {
+    const s = deepState();
+    buyWebNode(s, 'core_memory');
+    buyWebNode(s, 'core_pattern'); // +1% overload
+    expect(webOverloadBase(s)).toBeCloseTo(0.01, 10);
+    expect(overloadChance(s, 'neuron')).toBeCloseTo(0.01, 10);
+    buyWebNode(s, 'core_question'); // sync base 2 → 2.2
+    s.owned.neuron = 25;
+    expect(syncMult(s, 'neuron')).toBeCloseTo(2.2, 10);
   });
 });
 

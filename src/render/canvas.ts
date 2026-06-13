@@ -5,6 +5,7 @@
 
 import { GENERATORS, GEN_BY_ID } from '../data/generators';
 import type { GameState } from '../engine/state';
+import { cycleOf } from '../engine/economy';
 import { fmtNum } from '../util/format';
 import type { SpriteAtlas } from './sprites';
 import { SPRITE_WORLD, makeGlow } from './sprites';
@@ -189,7 +190,7 @@ export class NetworkRenderer {
     for (const n of this.net.nodes) {
       if (n.fusing) continue;
       const g = GEN_BY_ID[n.gen];
-      const vc = g.cycle * 1000;
+      const vc = cycleOf(this.state, g.id) * 1000;
       if (n.nextPingAt === 0) n.nextPingAt = n.bornAt + vc;
       if (nowMs >= n.nextPingAt) {
         if (nowMs - n.nextPingAt > vc * 2) {
@@ -402,7 +403,7 @@ export class NetworkRenderer {
       const nodes = this.net.perGen(g.id).filter((n) => !n.fusing);
       if (nodes.length === 0) continue;
       const anchor = nodes.reduce((a, b) => (b.stage > a.stage ? b : a), nodes[0]);
-      const progress = (this.state.cycleT[g.id] ?? 0) / g.cycle;
+      const progress = Math.min(1, (this.state.cycleT[g.id] ?? 0) / cycleOf(this.state, g.id));
       const r = SPRITE_WORLD * STAGE_SCALE[anchor.stage] * 0.42;
       ctx.strokeStyle = g.color;
       ctx.globalAlpha = 0.55;

@@ -16,7 +16,15 @@ import {
 import type { GameState, ActiveBuff } from './state';
 import { Emitter } from './events';
 import { nextRandom } from './rng';
-import { webGlobalMult, webCostDiv, webImpulseMult } from './web';
+import {
+  webGlobalMult,
+  webGenMult,
+  webCostDiv,
+  webImpulseMult,
+  webCycleDiv,
+  webOverloadBase,
+  webSyncBaseAdd,
+} from './web';
 
 /** Pulse events emitted per advance() call before a generator falls back to
  *  the (identical-total) integral path. Guards against tab-sleep floods. */
@@ -34,9 +42,17 @@ export function syncCount(state: GameState, genId: string): number {
   return n;
 }
 
-/** Synchronization milestones: ×2 per milestone reached (design.md §3). */
+/** Synchronization milestones: ×2 per milestone (design.md §3); The Question
+ *  web node deepens the base (×2.2). */
 export function syncMult(state: GameState, genId: string): number {
-  return 2 ** syncCount(state, genId);
+  return (2 + webSyncBaseAdd(state)) ** syncCount(state, genId);
+}
+
+/** Effective pulse cycle: speed effects divide the cycle AND multiply rate —
+ *  same per-pulse payout, more pulses, higher throughput. Tempo cards plug in
+ *  here too (session 4). */
+export function cycleOf(state: GameState, genId: string): number {
+  return GEN_BY_ID[genId].cycle / webCycleDiv(state);
 }
 
 export function buffMult(state: GameState, kind: ActiveBuff['kind']): number {
@@ -50,9 +66,10 @@ export function echoMult(state: GameState): number {
   return 1 + ECHO_BONUS_PER * state.echoes;
 }
 
-/** Overload (crit) chance per pulse — Overload cards plug in here (session 4). */
-export function overloadChance(_state: GameState, _genId: string): number {
-  return 0;
+/** Overload (crit) chance per pulse — web base + Overload cards (session 4).
+ *  Hard-capped so the EV multiplier stays bounded. */
+export function overloadChance(state: GameState, _genId: string): number {
+  return Math.min(0.5, webOverloadBase(state));
 }
 
 /** Per-second rate for one generator class, all multipliers applied,
@@ -67,6 +84,8 @@ export function genRate(state: GameState, genId: string): number {
     syncMult(state, genId) *
     echoMult(state) *
     webGlobalMult(state) *
+    webGenMult(state, genId) *
+    webCycleDiv(state) * // speed = more pulses at the same per-pulse payout
     buffMult(state, 'generation')
   );
 }
@@ -193,22 +212,23 @@ function advanceSegment(state: GameState, dt: number, emit?: Emitter): void {
     if (!o) continue;
     const rate = genRate(state, g.id);
     const chance = overloadChance(state, g.id);
-    const wouldEmit = emit && dt / g.cycle <= MAX_PULSE_EVENTS_PER_GEN;
+    const cycle = cycleOf(state, g.id);
+    const wouldEmit = emit && dt / cycle <= MAX_PULSE_EVENTS_PER_GEN;
     if (!wouldEmit) {
       // Integral path: pay continuously, overloads at expected value.
       // Pending accrual is left intact — it pays on the next emitted pulse.
       addEarnings(state, rate * dt * (1 + 9 * chance));
-      state.cycleT[g.id] = ((state.cycleT[g.id] ?? 0) + dt) % g.cycle;
+      state.cycleT[g.id] = ((state.cycleT[g.id] ?? 0) + dt) % cycle;
     } else {
-      let cyc = state.cycleT[g.id] ?? 0;
+      let cyc = Math.min(state.cycleT[g.id] ?? 0, cycle); // cycle may have shrunk
       let acc = state.accrual[g.id] ?? 0;
       let rem = dt;
       while (rem > 1e-9) {
-        const step = Math.min(rem, g.cycle - cyc);
+        const step = Math.min(rem, cycle - cyc);
         acc += rate * step;
         cyc += step;
         rem -= step;
-        if (cyc >= g.cycle - 1e-9) {
+        if (cyc >= cycle - 1e-9) {
           let amount = acc;
           let overload = false;
           if (chance > 0 && nextRandom(state) < chance) {
